@@ -374,13 +374,59 @@ function doFish(dt) {
 }
 
 function useStruct(st) {
+  openStructPanel(st);
+}
+
+function openStructPanel(st) {
   const def = STRUCTS[st.type];
-  if (def.sleep) { trySleep(st); return; }
-  if (def.farm) { useField(st); return; }
+  $('struct-title').textContent = def.n;
+  const box = $('struct-btns');
+  box.innerHTML = '';
+  const close = () => $('panel-struct').classList.add('hidden');
   if (def.cook) {
-    openCraftTab('요리');
-    return;
+    addBtn(box, '🍳 요리하기', () => { close(); openCraftTab('요리'); });
+    const fuelBtn = document.createElement('button');
+    fuelBtn.className = 'menu-btn';
+    fuelBtn.textContent = `🪵 연료 추가 — 통나무 1 (남은 연료 ${Math.max(0, Math.round(st.life / DAY_LEN * 100))}%)`;
+    fuelBtn.onclick = () => {
+      if (invCount('log') < 1) { toast('통나무가 없습니다.', '#ff5252'); return; }
+      removeItems('log', 1);
+      st.life = Math.min((st.life > 0 ? st.life : 0) + 0.6 * DAY_LEN, 2 * DAY_LEN);
+      st.lit = true;
+      toast(`${def.n}에 연료를 보충했습니다.`, '#8f8');
+      sfx('craft');
+      close();
+    };
+    box.appendChild(fuelBtn);
   }
+  if (def.sleep) addBtn(box, '💤 잠자기', () => { close(); trySleep(st); });
+  if (def.farm) {
+    const grown = st.planted && (st.growT || 0) >= FIELD_GROW * DAY_LEN;
+    const label = !st.planted ? '🌱 콩 심기'
+      : grown ? '🌾 수확하기!'
+      : `⏳ 성장중… (${Math.floor((st.growT || 0) / (FIELD_GROW * DAY_LEN) * 100)}%)`;
+    addBtn(box, label, () => { close(); useField(st); });
+  }
+  addBtn(box, '⛏ 해체하기 (재료 일부 회수)', () => { close(); dismantleStruct(st); });
+  openPanel('panel-struct');
+}
+
+function dismantleStruct(st) {
+  const i = G.structs.indexOf(st);
+  if (i < 0) return;
+  G.structs.splice(i, 1);
+  const r = RECIPES.find(r => r.place && r.out === st.type);
+  if (r) {
+    for (const [id, n] of Object.entries(r.mats)) {
+      const back = Math.ceil(n / 2);
+      if (back > 0) {
+        addItemStack(id, back);
+        spawnFloat(st.x, st.y - 0.6, `+${back} ${ITEMS[id].n}`, '#fff');
+      }
+    }
+  }
+  toast(`${STRUCTS[st.type].n}을(를) 해체했습니다.`, '#8f8');
+  sfx('hit');
 }
 
 function useField(st) {
@@ -476,19 +522,37 @@ function craft(r) {
   if (!Object.entries(r.mats).every(([id, n]) => invCount(id) >= n)) { toast('재료가 부족합니다.', '#ff5252'); return; }
   for (const [id, n] of Object.entries(r.mats)) removeItems(id, n);
   if (r.place) {
-    // 주변 빈 칸에 설치
+    // 주변 빈 칸에 설치 (플레이어가 갇히지 않는 자리만)
     const spots = [[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]];
-    let placed = false;
-    for (const [dx, dy] of spots) {
-      const x = (P.x | 0) + dx, y = (P.y | 0) + dy;
-      if (!isBlocked(x, y) && !G.objs.has(idx(x, y))) {
-        G.structs.push({ type: r.out, x, y, life: (STRUCTS[r.out].life || 0) * DAY_LEN, lit: true });
-        placed = true; break;
+    const px = P.x | 0, py = P.y | 0;
+    const freeSpot = ([dx, dy]) => {
+      const x = px + dx, y = py + dy;
+      return inMap(x, y) && !isBlocked(x, y) && !G.objs.has(idx(x, y));
+    };
+    // 설치 후에도 빠져나갈 수 있는지: 후보를 제외한 '이동 가능한' 인접 칸이 남아야 함
+    const escapable = (ex, ey) => {
+      for (const [dx, dy] of spots) {
+        const x = px + dx, y = py + dy;
+        if (x === ex && y === ey) continue;
+        if (!inMap(x, y) || isBlocked(x, y)) continue;
+        if (dx && dy && (isBlocked(px + dx, py) || isBlocked(px, py + dy) ||
+            (px + dx === ex && py === ey) || (px === ex && py + dy === ey))) continue; // 대각 끼임
+        return true;
       }
+      return false;
+    };
+    let placed = false, blockedByTrap = false;
+    for (const [dx, dy] of spots) {
+      if (!freeSpot([dx, dy])) continue;
+      const x = px + dx, y = py + dy;
+      if (!escapable(x, y)) { blockedByTrap = true; continue; }
+      G.structs.push({ type: r.out, x, y, life: (STRUCTS[r.out].life || 0) * DAY_LEN, lit: true });
+      placed = true; break;
     }
     if (!placed) {
       for (const [id, n] of Object.entries(r.mats)) addItemStack(id, n); // 환불
-      toast('설치할 공간이 없습니다.', '#ff5252'); return;
+      toast(blockedByTrap ? '설치하면 갇혀버립니다! 자리를 옮기세요.' : '설치할 공간이 없습니다.', '#ff5252');
+      return;
     }
     toast(`${STRUCTS[r.out].n} 설치 완료!`, '#8f8');
     bumpCounter('place', r.out);
@@ -1213,7 +1277,7 @@ function updateCharPanel() {
 }
 
 /* ---------- 패널 공통 ---------- */
-const PANELS = ['panel-inv', 'panel-craft', 'panel-char', 'panel-settings', 'panel-help'];
+const PANELS = ['panel-inv', 'panel-craft', 'panel-char', 'panel-settings', 'panel-help', 'panel-struct'];
 function openPanel(id) {
   PANELS.forEach(p => $(p).classList.add('hidden'));
   $(id).classList.remove('hidden');
