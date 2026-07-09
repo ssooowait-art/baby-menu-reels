@@ -21,6 +21,7 @@ const G = {
   floats: [],           // {x,y,txt,color,t}
   day: 1, t: 0.28,      // t: 하루 진행도 0~1
   shards: 0,
+  rain: false, rainT: 0,
   questIdx: 0,
   counters: {},         // 미션 카운터
   sound: true,
@@ -36,7 +37,7 @@ const P = {
   hp: 80, maxHp: 80,
   ep: 100, hunger: 85, thirst: 85, fatigue: 10, temp: 22,
   inv: [],                       // {id, qty, dur}
-  equipTool: -1, equipLight: -1, // inv index
+  equipTool: -1, equipLight: -1, equipArmor: -1, // inv index
   swing: 0, atkCd: 0,
   target: null,                  // {kind:'obj'|'mob'|'struct'|'water'|'move', ...}
   actProg: 0,
@@ -163,6 +164,10 @@ function removeSlot(i) {
   P.inv.splice(i, 1);
   if (P.equipTool === i) P.equipTool = -1; else if (P.equipTool > i) P.equipTool--;
   if (P.equipLight === i) P.equipLight = -1; else if (P.equipLight > i) P.equipLight--;
+  if (P.equipArmor === i) P.equipArmor = -1; else if (P.equipArmor > i) P.equipArmor--;
+}
+function armorDef() {
+  return P.equipArmor >= 0 && P.inv[P.equipArmor] ? (ITEMS[P.inv[P.equipArmor].id].def || 0) : 0;
 }
 function hasTool(tool) {
   return P.equipTool >= 0 && ITEMS[P.inv[P.equipTool].id].tool === tool
@@ -320,6 +325,7 @@ function doGather(dt) {
     }
     if (o.hp <= 0) {
       for (const y of def.yields) {
+        if (y.p && Math.random() > y.p) continue;
         addItemStack(y.id, y.q);
         spawnFloat(t.x, t.y - 0.6, `+${y.q} ${ITEMS[y.id].n}`, '#fff');
       }
@@ -335,17 +341,65 @@ function doGather(dt) {
 function doDrink() {
   P.thirst = clamp(P.thirst + 35, 0, 100);
   spawnFloat(P.x, P.y - 1, '+갈증 해소', '#59d5e8');
+  // 물주머니 자동 충전
+  let filled = false;
+  for (const s of P.inv) {
+    if (s.id === 'waterskin' && s.dur < ITEMS.waterskin.dur) { s.dur = ITEMS.waterskin.dur; filled = true; }
+  }
+  if (filled) toast('물주머니를 가득 채웠습니다.', '#59d5e8');
   bumpCounter('drink', 'water');
   sfx('eat');
   P.target = null;
 }
 
+function doFish(dt) {
+  const ri = hasTool('rod');
+  if (ri < 0 || P.equipTool !== ri) { doDrink(); return; }
+  P.actProg += dt;
+  if (P.actProg >= 3) {
+    P.actProg = 0; P.swing = 1;
+    P.inv[ri].dur -= 1;
+    P.ep = clamp(P.ep - 2, 0, 100);
+    if (Math.random() < 0.65 + P.luck / 150) {
+      addItemStack('fish', 1);
+      spawnFloat(P.x, P.y - 1, '+1 생선', '#6aa8c4');
+      gainExp(6);
+      sfx('pick');
+    } else {
+      spawnFloat(P.x, P.y - 1, '놓쳤다…', '#8f8b7c');
+    }
+    if (P.inv[ri].dur <= 0) { toast('낚싯대가 부러졌습니다!', '#ff9d2e'); removeSlot(ri); P.target = null; }
+    updateQuickslots();
+  }
+}
+
 function useStruct(st) {
   const def = STRUCTS[st.type];
   if (def.sleep) { trySleep(st); return; }
+  if (def.farm) { useField(st); return; }
   if (def.cook) {
     openCraftTab('요리');
     return;
+  }
+}
+
+function useField(st) {
+  if (!st.planted) {
+    if (invCount('bean') < 1) { toast('심을 콩이 없습니다.', '#ff9d2e'); return; }
+    removeItems('bean', 1);
+    st.planted = true; st.growT = 0;
+    spawnFloat(st.x, st.y - 0.8, '콩을 심었다', '#7fb04a');
+    sfx('pick');
+  } else if (st.growT >= FIELD_GROW * DAY_LEN) {
+    st.planted = false; st.growT = 0;
+    addItemStack('bean', 3);
+    spawnFloat(st.x, st.y - 0.8, '+3 콩', '#7fb04a');
+    bumpCounter('harvest', 'bean', 3);
+    gainExp(8);
+    sfx('craft');
+  } else {
+    const pct = Math.floor(st.growT / (FIELD_GROW * DAY_LEN) * 100);
+    toast(`작물이 자라는 중… (${pct}%)`, '#8f8b7c');
   }
 }
 
@@ -388,21 +442,37 @@ function equipItem(i) {
   const def = ITEMS[P.inv[i].id];
   if (def.equip === 'tool') P.equipTool = P.equipTool === i ? -1 : i;
   if (def.equip === 'light') P.equipLight = P.equipLight === i ? -1 : i;
+  if (def.equip === 'armor') P.equipArmor = P.equipArmor === i ? -1 : i;
   updateInvPanel(); updateQuickslots();
+}
+
+function useWaterskin(i) {
+  const s = P.inv[i];
+  if (s.dur <= 0) { toast('물주머니가 비어 있습니다. 물가에서 마시면 채워집니다.', '#8f8b7c'); return; }
+  s.dur--;
+  P.thirst = clamp(P.thirst + 30, 0, 100);
+  spawnFloat(P.x, P.y - 1, '+갈증 해소', '#59d5e8');
+  sfx('eat');
+  updateInvPanel(); updateHud();
 }
 
 /* ---------- 제작 ---------- */
 function canCraft(r) {
   if (P.level < (r.lv || 1)) return false;
   if (r.fire && !nearFire()) return false;
+  if (r.smelt && !nearFurnace()) return false;
   return Object.entries(r.mats).every(([id, n]) => invCount(id) >= n);
 }
 function nearFire() {
   return G.structs.some(s => STRUCTS[s.type].cook && s.life > 0 && dist(s.x, s.y, P.x, P.y) < 2.5);
 }
+function nearFurnace() {
+  return G.structs.some(s => STRUCTS[s.type].smelt && s.life > 0 && dist(s.x, s.y, P.x, P.y) < 2.5);
+}
 function craft(r) {
   if (P.level < (r.lv || 1)) { toast(r.lock || '레벨이 부족합니다.'); return; }
   if (r.fire && !nearFire()) { toast('불(모닥불/화덕) 근처에서만 요리할 수 있습니다.', '#ff9d2e'); return; }
+  if (r.smelt && !nearFurnace()) { toast('화덕 근처에서만 제련할 수 있습니다.', '#ff9d2e'); return; }
   if (!Object.entries(r.mats).every(([id, n]) => invCount(id) >= n)) { toast('재료가 부족합니다.', '#ff5252'); return; }
   for (const [id, n] of Object.entries(r.mats)) removeItems(id, n);
   if (r.place) {
@@ -426,6 +496,7 @@ function craft(r) {
     addItemStack(r.out, r.qty || 1);
     toast(`${ITEMS[r.out].n} 제작 완료!`, '#8f8');
     bumpCounter('craft', r.out);
+    if (r.out === 'ironAxe' || r.out === 'ironPick') bumpCounter('craft', 'ironTool');
     // 방금 만든 도구/횃불 자동 장착
     const def = ITEMS[r.out];
     if (def.equip === 'tool' && P.equipTool < 0) P.equipTool = P.inv.length - 1;
@@ -447,85 +518,124 @@ function darknessAlpha() {
   if (t >= 0.58 || t < 0.02) return 0.93;                        // 밤
   return 0.93 * (1 - (t - 0.02) / 0.04);                          // 새벽
 }
-let mobTimer = 0;
+let mobTimer = 0, animalTimer = 5;
+function spawnCreature(type, minD, maxD) {
+  for (let tries = 0; tries < 20; tries++) {
+    const a = Math.random() * Math.PI * 2, d = minD + Math.random() * (maxD - minD);
+    const x = Math.round(P.x + Math.cos(a) * d), y = Math.round(P.y + Math.sin(a) * d);
+    if (inMap(x, y) && !isBlocked(x, y)) {
+      const def = MOBS[type];
+      G.mobs.push({ type, x, y, hp: def.hp, maxHp: def.hp, atkCd: 0, t: Math.random() * 10, face: 1 });
+      return true;
+    }
+  }
+  return false;
+}
+function moveCreature(m, tx, ty, speed, dt) {
+  const d = dist(m.x, m.y, tx, ty);
+  if (d < 0.05) return;
+  const nx = m.x + (tx - m.x) / d * speed * dt;
+  const ny = m.y + (ty - m.y) / d * speed * dt;
+  m.face = (nx - ny) > (m.x - m.y) ? 1 : -1;
+  if (!isBlocked(Math.round(nx), Math.round(ny))) { m.x = nx; m.y = ny; }
+  else if (!isBlocked(Math.round(nx), Math.round(m.y))) m.x = nx;
+  else if (!isBlocked(Math.round(m.x), Math.round(ny))) m.y = ny;
+  else { m.wx = null; }
+}
 function updateMobs(dt) {
+  const nightCount = G.mobs.filter(m => MOBS[m.type].kind === 'night').length;
+  const animalCount = G.mobs.filter(m => MOBS[m.type].kind === 'animal').length;
+  // 밤 몬스터 스폰 (일수에 따라 강해짐)
   if (isNight()) {
     mobTimer -= dt;
-    if (mobTimer <= 0 && G.mobs.length < 4) {
-      mobTimer = 16 + Math.random() * 10;
-      // 플레이어에서 8~14칸 거리 스폰
-      for (let tries = 0; tries < 20; tries++) {
-        const a = Math.random() * Math.PI * 2, d = 8 + Math.random() * 6;
-        const x = Math.round(P.x + Math.cos(a) * d), y = Math.round(P.y + Math.sin(a) * d);
-        if (inMap(x, y) && !isBlocked(x, y)) {
-          const m = MOBS.wisp;
-          G.mobs.push({ type: 'wisp', x, y, hp: m.hp, maxHp: m.hp, atkCd: 0, t: Math.random() * 10 });
-          break;
-        }
-      }
+    const cap = 3 + Math.min(3, Math.floor((G.day - 1) / 2));
+    if (mobTimer <= 0 && nightCount < cap) {
+      mobTimer = Math.max(8, 16 - G.day) + Math.random() * 10;
+      const wolfChance = G.day >= 3 ? 0.3 : 0;
+      spawnCreature(Math.random() < wolfChance ? 'wolf' : 'wisp', 8, 14);
     }
-  } else if (G.mobs.length) {
-    // 낮이 되면 소멸
-    G.mobs.forEach(m => m.hp -= dt * 12);
+  } else {
+    // 낮이 되면 밤 몬스터 소멸
+    for (const m of G.mobs) if (MOBS[m.type].kind === 'night') m.hp -= dt * 12;
   }
+  // 낮 동물 스폰
+  animalTimer -= dt;
+  if (animalTimer <= 0) {
+    animalTimer = 18 + Math.random() * 12;
+    if (!isNight() && animalCount < 4) spawnCreature(Math.random() < 0.65 ? 'rabbit' : 'boar', 7, 13);
+  }
+
   for (const m of G.mobs) {
     m.t += dt;
     m.atkCd = Math.max(0, m.atkCd - dt);
     const def = MOBS[m.type];
     const d = dist(m.x, m.y, P.x, P.y);
-    // 불빛 근처 회피
-    const litSafe = G.structs.some(s => STRUCTS[s.type].warm && s.life > 0 && dist(s.x, s.y, m.x, m.y) < 3.2);
-    if (d < def.aggro && !litSafe) {
-      if (d > 1.1) {
-        const nx = m.x + (P.x - m.x) / d * def.speed * dt;
-        const ny = m.y + (P.y - m.y) / d * def.speed * dt;
-        if (!isBlocked(Math.round(nx), Math.round(ny))) { m.x = nx; m.y = ny; }
-        else { // 미끄러지기
-          if (!isBlocked(Math.round(nx), Math.round(m.y))) m.x = nx;
-          else if (!isBlocked(Math.round(m.x), Math.round(ny))) m.y = ny;
+
+    // 행동 결정
+    if (def.flee) {
+      // 토끼: 플레이어가 가까우면 도망
+      if (d < 4.5) {
+        const fx = clamp(m.x + (m.x - P.x) / (d || 1) * 3, 1, MAP - 2);
+        const fy = clamp(m.y + (m.y - P.y) / (d || 1) * 3, 1, MAP - 2);
+        moveCreature(m, fx, fy, def.speed, dt);
+        continue;
+      }
+    } else if (def.retaliate) {
+      // 멧돼지: 맞으면 분노해서 반격
+      if (m.angry && d < 10) {
+        if (d > 1.1) { moveCreature(m, P.x, P.y, def.speed, dt); continue; }
+        if (m.atkCd <= 0) {
+          m.atkCd = 1.6;
+          hurtPlayer(def.dmg);
         }
-      } else if (m.atkCd <= 0) {
-        m.atkCd = 1.5;
-        const dmg = Math.max(1, def.dmg - Math.floor(P.level / 3));
-        P.hp -= dmg;
-        spawnFloat(P.x, P.y - 1.4, `-${dmg}`, '#ff5252');
-        sfx('hurt');
-        if (P.hp <= 0) die();
+        continue;
       }
-    } else {
-      // 배회
-      if (!m.wx || dist(m.x, m.y, m.wx, m.wy) < 0.3) {
-        m.wx = clamp(m.x + (Math.random() - .5) * 6, 1, MAP - 2);
-        m.wy = clamp(m.y + (Math.random() - .5) * 6, 1, MAP - 2);
-      }
-      const wd = dist(m.x, m.y, m.wx, m.wy);
-      if (wd > 0.1) {
-        const nx = m.x + (m.wx - m.x) / wd * def.speed * 0.4 * dt;
-        const ny = m.y + (m.wy - m.y) / wd * def.speed * 0.4 * dt;
-        if (!isBlocked(Math.round(nx), Math.round(ny))) { m.x = nx; m.y = ny; } else { m.wx = null; }
+    } else if (def.kind === 'night') {
+      // 정령/늑대: 어그로 범위 내 추격 (늑대는 불빛 무시)
+      const litSafe = !def.braveFire &&
+        G.structs.some(s => STRUCTS[s.type].warm && s.life > 0 && dist(s.x, s.y, m.x, m.y) < 3.2);
+      if (d < def.aggro && !litSafe) {
+        if (d > 1.1) { moveCreature(m, P.x, P.y, def.speed, dt); continue; }
+        if (m.atkCd <= 0) {
+          m.atkCd = 1.5;
+          hurtPlayer(def.dmg);
+        }
+        continue;
       }
     }
+    // 배회
+    if (m.wx == null || dist(m.x, m.y, m.wx, m.wy) < 0.3) {
+      m.wx = clamp(m.x + (Math.random() - .5) * 6, 1, MAP - 2);
+      m.wy = clamp(m.y + (Math.random() - .5) * 6, 1, MAP - 2);
+    }
+    moveCreature(m, m.wx, m.wy, def.speed * 0.35, dt);
   }
-  // 죽은 몹 처리
+  // 죽은 생물 처리
   for (let i = G.mobs.length - 1; i >= 0; i--) {
     const m = G.mobs[i];
     if (m.hp <= 0) {
       const def = MOBS[m.type];
-      if (isNight()) { // 플레이어 처치 보상 (낮 소멸은 보상 없음 → hp가 전투로 깎였는지 확인)
-        if (m.killed) {
-          for (const dr of def.drops) if (Math.random() < dr.p) {
-            addItemStack(dr.id, dr.q);
-            if (dr.id === 'shard') G.shards += dr.q;
-            spawnFloat(m.x, m.y - 0.6, `+${dr.q} ${ITEMS[dr.id].n}`, '#b13cff');
-          }
-          gainExp(def.exp);
-          bumpCounter('kill', m.type);
+      if (m.killed) { // 플레이어가 처치한 경우에만 보상 (낮 소멸 제외)
+        for (const dr of def.drops) if (Math.random() < dr.p) {
+          addItemStack(dr.id, dr.q);
+          if (dr.id === 'shard') G.shards += dr.q;
+          spawnFloat(m.x, m.y - 0.6, `+${dr.q} ${ITEMS[dr.id].n}`, dr.id === 'shard' ? '#b13cff' : '#fff');
         }
+        gainExp(def.exp);
+        bumpCounter('kill', m.type);
       }
       G.mobs.splice(i, 1);
       if (P.target && P.target.mob === m) P.target = null;
     }
   }
+}
+
+function hurtPlayer(rawDmg) {
+  const dmg = Math.max(1, rawDmg - armorDef() - Math.floor(P.level / 3));
+  P.hp -= dmg;
+  spawnFloat(P.x, P.y - 1.4, `-${dmg}`, '#ff5252');
+  sfx('hurt');
+  if (P.hp <= 0) die();
 }
 
 function playerAttack(mob) {
@@ -535,6 +645,7 @@ function playerAttack(mob) {
   let dmg = 3 + (weapon ? weapon.dmg : 0) + Math.floor(P.str / 5);
   if (Math.random() < 0.08 + P.luck / 200) { dmg *= 2; spawnFloat(mob.x, mob.y - 1.6, '치명타!', '#ffe066'); }
   mob.hp -= dmg; mob.killed = true;
+  if (MOBS[mob.type].retaliate) mob.angry = true;
   spawnFloat(mob.x, mob.y - 1.1, `-${dmg}`, '#fff');
   P.ep = clamp(P.ep - 1.5, 0, 100);
   sfx('hit');
@@ -577,9 +688,11 @@ function updateSurvival(dt) {
   P.thirst = clamp(P.thirst - 46 * perDay, 0, 100);
   P.fatigue = clamp(P.fatigue + 40 * perDay, 0, 100);
   // 체온
-  const ambient = isNight() ? 4 : 22;
+  let ambient = isNight() ? 4 : 22;
+  if (G.rain) ambient -= 7;
   const warm = G.structs.some(s => STRUCTS[s.type].warm && s.life > 0 && dist(s.x, s.y, P.x, P.y) < 3) ? 26 : 0;
-  const target = Math.max(ambient, warm) + (P.equipLight >= 0 ? 4 : 0);
+  const armorWarm = P.equipArmor >= 0 ? (ITEMS[P.inv[P.equipArmor].id].warm || 0) : 0;
+  const target = Math.max(ambient, warm) + (P.equipLight >= 0 ? 4 : 0) + armorWarm;
   P.temp += (target - P.temp) * dt * 0.05;
   // 상태 페널티
   if (P.hunger <= 0) P.hp -= dt * 0.8;
@@ -591,20 +704,38 @@ function updateSurvival(dt) {
   P.atkCd = Math.max(0, P.atkCd - dt);
   P.swing = Math.max(0, P.swing - dt * 4);
   if (P.hp <= 0) die();
-  // 횃불 내구도 (밤에만 소모)
-  if (P.equipLight >= 0 && isNight()) {
-    P.inv[P.equipLight].dur -= dt;
+  // 횃불 내구도 (밤에만 소모 · 등불은 영구)
+  if (P.equipLight >= 0 && isNight() && P.inv[P.equipLight].id === 'torch') {
+    P.inv[P.equipLight].dur -= dt * (G.rain ? 1.6 : 1);
     if (P.inv[P.equipLight].dur <= 0) {
       toast('횃불이 다 타버렸습니다!', '#ff9d2e');
       removeSlot(P.equipLight);
       updateQuickslots();
     }
   }
-  // 구조물 연료
+  // 구조물 연료 & 밭 성장
   for (const s of G.structs) {
     if (STRUCTS[s.type].life) {
-      s.life -= dt;
+      s.life -= dt * (G.rain ? 1.8 : 1);
       if (s.life <= 0 && s.lit) { s.lit = false; toast(`${STRUCTS[s.type].n}이(가) 꺼졌습니다.`, '#8f8b7c'); }
+    }
+    if (STRUCTS[s.type].farm && s.planted) {
+      s.growT = (s.growT || 0) + dt * (G.rain ? 1.6 : 1);
+    }
+  }
+}
+
+/* ---------- 날씨 (비) ---------- */
+function updateWeather(dt) {
+  if (G.rain) {
+    G.rainT -= dt;
+    if (G.rainT <= 0) { G.rain = false; toast('비가 그쳤습니다.', '#8f8b7c'); }
+  } else {
+    // 하루 평균 한 번꼴로 비 (프레임당 확률)
+    if (Math.random() < dt / DAY_LEN * 1.2) {
+      G.rain = true;
+      G.rainT = 35 + Math.random() * 40;
+      toast('비가 내리기 시작합니다… 몸이 차가워집니다.', '#59d5e8');
     }
   }
 }
@@ -641,6 +772,7 @@ function updatePlayer(dt) {
     }
     else if (t.kind === 'water') {
       if (!nearTarget(t)) P.target = null;
+      else if (P.equipTool >= 0 && ITEMS[P.inv[P.equipTool].id].tool === 'rod') doFish(dt);
       else doDrink();
     }
     else if (t.kind === 'struct') {
@@ -714,10 +846,13 @@ function render() {
     draws.push({ depth: x + y, fn: () => drawObj(o, x, y, ox, oy) });
   }
   for (const s of G.structs) draws.push({ depth: s.x + s.y, fn: () => drawStruct(s, ox, oy) });
-  for (const m of G.mobs) draws.push({ depth: m.x + m.y + 0.01, fn: () => drawMob(ctx, worldSX(m.x, m.y) + ox, worldSY(m.x, m.y) + oy, m.t, m.hp / m.maxHp) });
+  for (const m of G.mobs) draws.push({ depth: m.x + m.y + 0.01, fn: () => drawCreature(m, ox, oy) });
   draws.push({ depth: P.x + P.y + 0.02, fn: () => drawPlayer(ctx, worldSX(P.x, P.y) + ox, worldSY(P.x, P.y) + oy, P.path.length ? animT : 0, P.face < 0, P.swing) });
   draws.sort((a, b) => a.depth - b.depth);
   for (const d of draws) d.fn();
+
+  // 비
+  if (G.rain) drawRain();
 
   // 어둠 & 빛
   drawDarkness(ox, oy);
@@ -765,7 +900,50 @@ function drawStruct(s, ox, oy) {
     }
   } else if (s.type === 'bed') {
     ctx.drawImage(SPR.bed, sx - 32, sy - 24);
+  } else if (s.type === 'field') {
+    ctx.drawImage(SPR.field, sx - 32, sy - 20);
+    if (s.planted) {
+      const grown = (s.growT || 0) >= FIELD_GROW * DAY_LEN;
+      const spr = grown ? SPR.sprout[1] : SPR.sprout[0];
+      ctx.drawImage(spr, sx - spr.width / 2, sy - spr.height + 4);
+      if (!grown) { // 어린 싹 몇 개 더
+        ctx.drawImage(SPR.sprout[0], sx - 16, sy - 16);
+        ctx.drawImage(SPR.sprout[0], sx + 2, sy - 12);
+      }
+    }
   }
+}
+
+function drawCreature(m, ox, oy) {
+  const sx = worldSX(m.x, m.y) + ox, sy = worldSY(m.x, m.y) + oy;
+  const r = m.hp / m.maxHp;
+  const flip = m.face < 0;
+  if (m.type === 'rabbit') drawRabbit(ctx, sx, sy, m.t, r, flip);
+  else if (m.type === 'boar') drawBoar(ctx, sx, sy, m.t, r, flip, m.angry);
+  else if (m.type === 'wolf') drawWolf(ctx, sx, sy, m.t, r, flip);
+  else drawMob(ctx, sx, sy, m.t, r);
+}
+
+// 빗줄기
+function drawRain() {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(180,215,235,.4)';
+  ctx.lineWidth = 1.2;
+  const n = 90;
+  for (let i = 0; i < n; i++) {
+    // 의사 난수 고정 배치 + 시간 흐름
+    const seed = i * 37.71;
+    const x = ((seed * 13.3 + animT * 320) % (VW + 120)) - 60;
+    const y = ((seed * 71.7 + animT * 640) % (VH + 40)) - 20;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - 5, y + 14);
+    ctx.stroke();
+  }
+  // 차가운 색조
+  ctx.fillStyle = 'rgba(60,90,120,.10)';
+  ctx.fillRect(0, 0, VW, VH);
+  ctx.restore();
 }
 
 // 어둠 오버레이(빛 구멍 뚫기)
@@ -785,7 +963,8 @@ function drawDarkness(ox, oy) {
   const lights = [];
   // 플레이어 기본 시야
   lights.push({ x: P.x, y: P.y, r: alpha > 0.5 ? 2.2 : 8, warm: false });
-  if (P.equipLight >= 0) lights.push({ x: P.x, y: P.y, r: 4.6, warm: true });
+  if (P.equipLight >= 0 && P.inv[P.equipLight])
+    lights.push({ x: P.x, y: P.y, r: ITEMS[P.inv[P.equipLight].id].light || 4.6, warm: true });
   for (const s of G.structs) {
     const def = STRUCTS[s.type];
     if (def.light && s.lit && s.life > 0) lights.push({ x: s.x, y: s.y, r: def.light, warm: true });
@@ -838,7 +1017,12 @@ function drawLabels(ox, oy) {
   for (const s of G.structs) {
     if (dist(s.x, s.y, P.x, P.y) > 4) continue;
     const sx = worldSX(s.x, s.y) + ox, sy = worldSY(s.x, s.y) + oy;
-    const hint = STRUCTS[s.type].sleep ? ' (잠자기)' : STRUCTS[s.type].cook && s.lit ? ' (요리)' : '';
+    let hint = STRUCTS[s.type].sleep ? ' (잠자기)' : STRUCTS[s.type].cook && s.lit ? ' (요리)' : '';
+    if (STRUCTS[s.type].farm) {
+      hint = !s.planted ? ' (심기)'
+        : (s.growT || 0) >= FIELD_GROW * DAY_LEN ? ' (수확!)'
+        : ' (성장중)';
+    }
     ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillText(STRUCTS[s.type].n + hint, sx + 1, sy - 47);
     ctx.fillStyle = '#ffd94d'; ctx.fillText(STRUCTS[s.type].n + hint, sx, sy - 48);
   }
@@ -896,9 +1080,11 @@ function updateQuickslots() {
       const item = P.inv[s.inv], def = ITEMS[item.id];
       c.drawImage(SPR.icons[item.id], 6, 6);
       s.el.classList.add('active');
-      dur.style.display = 'block';
-      dur.style.width = clamp(item.dur / def.dur, 0, 1) * 82 + '%';
-      dur.style.background = item.dur / def.dur > 0.3 ? '#4caf50' : '#ff5252';
+      if (def.dur) {
+        dur.style.display = 'block';
+        dur.style.width = clamp(item.dur / def.dur, 0, 1) * 82 + '%';
+        dur.style.background = item.dur / def.dur > 0.3 ? '#4caf50' : '#ff5252';
+      } else dur.style.display = 'none';
     } else {
       c.globalAlpha = 0.22;
       c.drawImage(SPR.icons[s.fallbackIcon], 6, 6);
@@ -921,7 +1107,7 @@ function updateInvPanel() {
     cv.getContext('2d').drawImage(SPR.icons[s.id], 0, 0);
     el.appendChild(cv);
     if (s.qty > 1) { const q = document.createElement('span'); q.className = 'qty'; q.textContent = s.qty; el.appendChild(q); }
-    if (i === P.equipTool || i === P.equipLight) { const e = document.createElement('span'); e.className = 'equipped'; e.textContent = '장착'; el.appendChild(e); }
+    if (i === P.equipTool || i === P.equipLight || i === P.equipArmor) { const e = document.createElement('span'); e.className = 'equipped'; e.textContent = '장착'; el.appendChild(e); }
     el.onclick = () => { selSlot = selSlot === i ? -1 : i; updateInvPanel(); };
     grid.appendChild(el);
   });
@@ -937,7 +1123,8 @@ function updateInvPanel() {
     $('inv-info-desc').textContent = def.desc || '';
     const btns = $('inv-info-btns'); btns.innerHTML = '';
     if (def.food) addBtn(btns, '먹기', () => { eatItem(selSlot); });
-    if (def.equip) addBtn(btns, (selSlot === P.equipTool || selSlot === P.equipLight) ? '해제' : '장착', () => { equipItem(selSlot); });
+    if (s.id === 'waterskin') addBtn(btns, `마시기 (${Math.floor(s.dur)}/${def.dur})`, () => { useWaterskin(selSlot); });
+    if (def.equip) addBtn(btns, (selSlot === P.equipTool || selSlot === P.equipLight || selSlot === P.equipArmor) ? '해제' : '장착', () => { equipItem(selSlot); });
     addBtn(btns, '버리기', () => { removeSlot(selSlot); selSlot = -1; updateInvPanel(); updateQuickslots(); });
   } else info.classList.add('hidden');
 }
@@ -969,17 +1156,18 @@ function updateCraftPanel() {
   for (const r of RECIPES.filter(r => r.cat === craftCat)) {
     const lockedLv = P.level < (r.lv || 1);
     const lockedFire = r.fire && !nearFire();
+    const lockedSmelt = r.smelt && !nearFurnace();
     const card = document.createElement('div');
-    card.className = 'craft-card' + ((lockedLv || lockedFire) ? ' locked' : '');
+    card.className = 'craft-card' + ((lockedLv || lockedFire || lockedSmelt) ? ' locked' : '');
     const name = r.place ? STRUCTS[r.out].n : ITEMS[r.out].n;
     const iconWrap = document.createElement('div'); iconWrap.className = 'cc-icon';
     const cv = document.createElement('canvas'); cv.width = 40; cv.height = 40;
     cv.style.transform = 'scale(1.7)';
     cv.getContext('2d').drawImage(SPR.icons[r.out], 0, 0);
     iconWrap.appendChild(cv);
-    if (lockedLv || lockedFire) {
+    if (lockedLv || lockedFire || lockedSmelt) {
       const lock = document.createElement('div'); lock.className = 'cc-lock';
-      lock.textContent = lockedLv ? (r.lock || `레벨 ${r.lv} 필요`) : '불 근처 필요';
+      lock.textContent = lockedLv ? (r.lock || `레벨 ${r.lv} 필요`) : lockedSmelt ? '화덕 근처 필요' : '불 근처 필요';
       iconWrap.appendChild(lock);
     }
     // 재료
@@ -1013,7 +1201,7 @@ function updateCharPanel() {
     ['힘', P.str], ['민첩', P.agi], ['지능', P.int], ['체력', P.vit], ['운', P.luck],
     ['생명력', `${Math.ceil(P.hp)} / ${P.maxHp}`],
     ['에너지', `${Math.ceil(P.ep)} / 100`],
-    ['공격력', atk], ['치명타 확률', `${Math.round(8 + P.luck / 2)}%`],
+    ['공격력', atk], ['방어력', armorDef()], ['치명타 확률', `${Math.round(8 + P.luck / 2)}%`],
     ['이동 속도', 10], ['배고픔', Math.round(P.hunger)], ['갈증', Math.round(P.thirst)],
     ['피로도', Math.round(P.fatigue)], ['체온', Math.round(P.temp) + '°'],
     ['어둠의 파편', G.shards], ['생존 일수', G.day + '일'],
@@ -1047,9 +1235,10 @@ function save() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       seed: worldSeed, day: G.day, t: G.t, shards: G.shards, questIdx: G.questIdx,
       counters: G.counters, structs: G.structs, sound: G.sound, objs: objsArr,
+      rain: G.rain, rainT: G.rainT,
       p: { x: P.x, y: P.y, level: P.level, exp: P.exp, hp: P.hp, maxHp: P.maxHp,
            ep: P.ep, hunger: P.hunger, thirst: P.thirst, fatigue: P.fatigue, temp: P.temp,
-           inv: P.inv, equipTool: P.equipTool, equipLight: P.equipLight,
+           inv: P.inv, equipTool: P.equipTool, equipLight: P.equipLight, equipArmor: P.equipArmor,
            str: P.str, agi: P.agi, int: P.int, vit: P.vit, luck: P.luck },
     }));
   } catch (e) { /* 저장 공간 부족 등 */ }
@@ -1066,7 +1255,9 @@ function load() {
       G.objs.set(i, { type, hp, dead: !!dead, respawnAt });
     G.day = d.day; G.t = d.t; G.shards = d.shards; G.questIdx = d.questIdx;
     G.counters = d.counters || {}; G.structs = d.structs || []; G.sound = d.sound !== false;
+    G.rain = !!d.rain; G.rainT = d.rainT || 0;
     Object.assign(P, d.p);
+    if (P.equipArmor === undefined) P.equipArmor = -1; // 구버전 저장 호환
     return true;
   } catch (e) { return false; }
 }
@@ -1126,6 +1317,7 @@ function loop(ts) {
   animT += dt;
   if (!G.gameOver && !G.sleeping) {
     updateTime(dt);
+    updateWeather(dt);
     updatePlayer(dt);
     updateMobs(dt);
     updateSurvival(dt);

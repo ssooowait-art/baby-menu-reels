@@ -226,6 +226,37 @@ function makeStructs() {
       ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.stroke();
     }
   });
+  SPR.field = mkCanvas(64, 40, (ctx) => {
+    ctx.save(); ctx.translate(32, 24);
+    ctx.fillStyle = '#6b5537'; ctx.strokeStyle = '#3c2c16'; ctx.lineWidth = 1.5;
+    diamond(ctx, 0, 0, 56, 28); ctx.fill(); ctx.stroke();
+    // 고랑
+    ctx.strokeStyle = 'rgba(50,36,18,.8)'; ctx.lineWidth = 2;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-18 + i * 9, -6 + i * 4.5);
+      ctx.lineTo(4 + i * 9, 5 + i * 4.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+  SPR.sprout = [
+    mkCanvas(24, 24, (ctx) => { // 새싹
+      ctx.strokeStyle = '#7fb04a'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(12, 22); ctx.lineTo(12, 14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(12, 16); ctx.quadraticCurveTo(7, 14, 6, 9); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(12, 15); ctx.quadraticCurveTo(17, 13, 18, 8); ctx.stroke();
+    }),
+    mkCanvas(28, 34, (ctx) => { // 다 자란 콩
+      ctx.strokeStyle = '#3f6527'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(14, 32); ctx.quadraticCurveTo(12, 16, 14, 4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(14, 20); ctx.quadraticCurveTo(21, 17, 24, 10); ctx.stroke();
+      ctx.fillStyle = '#7fb04a'; ctx.strokeStyle = '#33531f'; ctx.lineWidth = 1.5;
+      [[9,14],[19,10],[16,22]].forEach(([x,y]) => {
+        ctx.beginPath(); ctx.ellipse(x, y, 3, 6, 0.4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      });
+    }),
+  ];
   SPR.bed = mkCanvas(64, 40, (ctx) => {
     const r = srand(88);
     ctx.save(); ctx.translate(32, 24);
@@ -342,12 +373,143 @@ function makeIcons() {
     ctx.strokeStyle = '#5a5a54'; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(18, 6); ctx.quadraticCurveTo(28, 2, 36, 12); ctx.stroke();
   });
+  I.ironAxe = toolIcon((ctx) => {
+    ctx.fillStyle = '#cfd6de'; ctx.strokeStyle = '#4a5058'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(23, 4); ctx.lineTo(35, 9); ctx.lineTo(33, 21); ctx.lineTo(23, 16); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)';
+    ctx.beginPath(); ctx.moveTo(33, 10); ctx.lineTo(32, 18); ctx.stroke();
+  });
+  I.ironPick = toolIcon((ctx) => {
+    ctx.strokeStyle = '#aab2ba'; ctx.lineWidth = 4.5;
+    ctx.beginPath(); ctx.moveTo(17, 7); ctx.quadraticCurveTo(28, 1, 37, 12); ctx.stroke();
+    ctx.strokeStyle = '#4a5058'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(17, 7); ctx.quadraticCurveTo(28, 1, 37, 12); ctx.stroke();
+  });
   I.spear = mk((ctx) => {
     ctx.strokeStyle = '#8a6a3e'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(8, 34); ctx.lineTo(28, 12); ctx.stroke();
     ctx.fillStyle = '#4c4c50'; ctx.strokeStyle = '#17171b'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(26, 14); ctx.lineTo(34, 4); ctx.lineTo(31, 14) ; ctx.closePath();
     ctx.fill(); ctx.stroke();
+  });
+  I.ironOre = mk((ctx) => {
+    ctx.fillStyle = '#7a6a5c'; ctx.strokeStyle = '#3a2e24'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(8, 28); ctx.lineTo(12, 14); ctx.lineTo(24, 10); ctx.lineTo(32, 20); ctx.lineTo(28, 30); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c1552e';
+    for (const [x,y] of [[15,20],[23,16],[24,24]]) {
+      ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI*2); ctx.fill();
+    }
+  });
+  I.iron = mk((ctx) => {
+    ctx.fillStyle = '#a9b0b8'; ctx.strokeStyle = '#4a5058'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(8, 26); ctx.lineTo(14, 16); ctx.lineTo(32, 16); ctx.lineTo(26, 26); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#cfd6de';
+    ctx.beginPath(); ctx.moveTo(14, 16); ctx.lineTo(32, 16); ctx.lineTo(30, 12); ctx.lineTo(16, 12); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  });
+  I.hide = mk((ctx) => {
+    ctx.fillStyle = '#a8874f'; ctx.strokeStyle = '#5c451e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(10, 10); ctx.quadraticCurveTo(20, 4, 30, 10);
+    ctx.quadraticCurveTo(34, 20, 30, 30); ctx.quadraticCurveTo(20, 36, 10, 30);
+    ctx.quadraticCurveTo(6, 20, 10, 10); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(92,69,30,.6)';
+    ctx.beginPath(); ctx.moveTo(14, 16); ctx.lineTo(26, 24); ctx.stroke();
+  });
+  I.rawMeat = mk((ctx) => {
+    ctx.fillStyle = '#d95560'; ctx.strokeStyle = '#7c1522'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(18, 20, 11, 9, 0.4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#f2ead8';
+    ctx.beginPath(); ctx.arc(30, 12, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,220,220,.7)';
+    ctx.beginPath(); ctx.moveTo(12, 18); ctx.quadraticCurveTo(18, 22, 24, 20); ctx.stroke();
+  });
+  I.cookedMeat = mk((ctx) => {
+    ctx.fillStyle = '#9c5a28'; ctx.strokeStyle = '#4c2a0e'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(18, 20, 11, 9, 0.4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#e8d8b8';
+    ctx.beginPath(); ctx.arc(30, 12, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#6e3a12';
+    ctx.beginPath(); ctx.moveTo(11, 16); ctx.lineTo(24, 24); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(13, 24); ctx.lineTo(24, 15); ctx.stroke();
+  });
+  I.fish = mk((ctx) => {
+    ctx.fillStyle = '#6aa8c4'; ctx.strokeStyle = '#2a5468'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(18, 20, 11, 6, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(28, 20); ctx.lineTo(35, 14); ctx.lineTo(35, 26); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#1a2a34';
+    ctx.beginPath(); ctx.arc(12, 18, 1.5, 0, Math.PI*2); ctx.fill();
+  });
+  I.cookedFish = mk((ctx) => {
+    ctx.fillStyle = '#c98d4a'; ctx.strokeStyle = '#6e4a14'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(18, 20, 11, 6, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(28, 20); ctx.lineTo(35, 14); ctx.lineTo(35, 26); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#8a5c1a';
+    for (const x of [12, 17, 22]) { ctx.beginPath(); ctx.moveTo(x, 16); ctx.lineTo(x + 2, 24); ctx.stroke(); }
+  });
+  I.rod = mk((ctx) => {
+    ctx.strokeStyle = '#8a6a3e'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(8, 34); ctx.quadraticCurveTo(20, 18, 32, 8); ctx.stroke();
+    ctx.strokeStyle = '#d8d4c4'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(32, 8); ctx.lineTo(31, 24); ctx.stroke();
+    ctx.strokeStyle = '#4c4c50'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(31, 27, 3, -0.5, Math.PI * 0.9); ctx.stroke();
+  });
+  I.waterskin = mk((ctx) => {
+    ctx.fillStyle = '#8a6a3e'; ctx.strokeStyle = '#4a3a1e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(16, 12); ctx.quadraticCurveTo(6, 20, 12, 30);
+    ctx.quadraticCurveTo(20, 36, 28, 30); ctx.quadraticCurveTo(34, 20, 24, 12);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#5c451e';
+    ctx.fillRect(17, 6, 6, 7); ctx.strokeRect(17, 6, 6, 7);
+    ctx.strokeStyle = 'rgba(90,220,240,.8)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(14, 24); ctx.quadraticCurveTo(20, 28, 26, 24); ctx.stroke();
+  });
+  I.leatherArmor = mk((ctx) => {
+    ctx.fillStyle = '#a8874f'; ctx.strokeStyle = '#5c451e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(12, 8); ctx.lineTo(28, 8); ctx.lineTo(32, 14); ctx.lineTo(29, 18);
+    ctx.lineTo(28, 34); ctx.lineTo(12, 34); ctx.lineTo(11, 18); ctx.lineTo(8, 14); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(92,69,30,.8)';
+    ctx.beginPath(); ctx.moveTo(20, 8); ctx.lineTo(20, 34); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(15, 14); ctx.lineTo(25, 14); ctx.stroke();
+  });
+  I.lantern = mk((ctx) => {
+    ctx.strokeStyle = '#4a4a44; '; ctx.strokeStyle = '#4a4a44'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(20, 8, 4, Math.PI, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(177,60,255,.25)'; ctx.strokeStyle = '#3a3a34';
+    ctx.beginPath(); ctx.moveTo(13, 12); ctx.lineTo(27, 12); ctx.lineTo(29, 32) ; ctx.lineTo(11, 32); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#b13cff';
+    ctx.beginPath(); ctx.moveTo(20, 16); ctx.lineTo(24, 22); ctx.lineTo(20, 28); ctx.lineTo(16, 22); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(240,210,255,.9)';
+    ctx.beginPath(); ctx.arc(20, 22, 2, 0, Math.PI*2); ctx.fill();
+  });
+  I.darkBlade = mk((ctx) => {
+    ctx.fillStyle = '#3a2a54'; ctx.strokeStyle = '#1a1028'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(10, 30); ctx.lineTo(26, 6); ctx.lineTo(30, 10); ctx.lineTo(14, 34); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#b13cff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(13, 29); ctx.lineTo(27, 9); ctx.stroke();
+    ctx.strokeStyle = '#8a6a3e'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(8, 36); ctx.lineTo(12, 30); ctx.stroke();
+    ctx.strokeStyle = '#4c4c50'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(8, 28); ctx.lineTo(16, 34); ctx.stroke();
+  });
+  I.field = mk((ctx) => {
+    ctx.fillStyle = '#6b5537'; ctx.strokeStyle = '#3c2c16'; ctx.lineWidth = 2;
+    diamond(ctx, 20, 22, 30, 16); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#7fb04a'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    for (const [x, y] of [[14, 20], [22, 18], [24, 26]]) {
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - 5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, y - 3); ctx.lineTo(x - 3, y - 6); ctx.stroke();
+    }
   });
   // 구조물 아이콘
   I.campfire = mk((ctx) => {
@@ -438,6 +600,105 @@ function drawMob(ctx, x, y, t, hpRatio) {
   if (hpRatio < 1) {
     ctx.fillStyle = '#000'; ctx.fillRect(-12, -22, 24, 4);
     ctx.fillStyle = '#d9273a'; ctx.fillRect(-11, -21, 22 * hpRatio, 2);
+  }
+  ctx.restore();
+}
+
+function drawRabbit(ctx, x, y, t, hpRatio, flip) {
+  ctx.save(); ctx.translate(x, y);
+  if (flip) ctx.scale(-1, 1);
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.beginPath(); ctx.ellipse(0, 0, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+  const hop = Math.abs(Math.sin(t * 8)) * 4;
+  ctx.translate(0, -hop);
+  // 몸통
+  ctx.fillStyle = '#cfc4b0'; ctx.strokeStyle = '#6e6250'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(0, -8, 8, 6, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // 머리
+  ctx.beginPath(); ctx.arc(7, -13, 4.5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // 귀
+  ctx.beginPath(); ctx.ellipse(6, -20, 1.6, 5, -0.15, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(9, -20, 1.6, 5, 0.15, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // 꼬리 & 눈
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(-8, -8, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1a120a';
+  ctx.beginPath(); ctx.arc(8.5, -14, 1, 0, Math.PI*2); ctx.fill();
+  if (hpRatio < 1) {
+    ctx.fillStyle = '#000'; ctx.fillRect(-10, -28, 20, 3);
+    ctx.fillStyle = '#d9273a'; ctx.fillRect(-9, -27.4, 18 * hpRatio, 1.8);
+  }
+  ctx.restore();
+}
+
+function drawBoar(ctx, x, y, t, hpRatio, flip, angry) {
+  ctx.save(); ctx.translate(x, y);
+  if (flip) ctx.scale(-1, 1);
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.beginPath(); ctx.ellipse(0, 0, 12, 5, 0, 0, Math.PI*2); ctx.fill();
+  const trot = Math.sin(t * 9) * 1.5;
+  ctx.translate(0, trot * 0.5);
+  // 다리
+  ctx.strokeStyle = '#3c2c1a'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-6, -8); ctx.lineTo(-6 - trot, -1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(5, -8); ctx.lineTo(5 + trot, -1); ctx.stroke();
+  // 몸통
+  ctx.fillStyle = '#5c4630'; ctx.strokeStyle = '#2c1e10'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(-1, -13, 11, 8, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // 갈기
+  ctx.strokeStyle = '#3c2c1a'; ctx.lineWidth = 2;
+  for (let i = -8; i < 6; i += 3) {
+    ctx.beginPath(); ctx.moveTo(i, -20); ctx.lineTo(i - 1, -23); ctx.stroke();
+  }
+  // 머리 + 코
+  ctx.fillStyle = '#6e5238';
+  ctx.beginPath(); ctx.ellipse(10, -12, 6, 5.5, 0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#8a6a4a';
+  ctx.beginPath(); ctx.ellipse(15, -10, 3, 2.5, 0.2, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // 엄니
+  ctx.strokeStyle = '#f2ead8'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(13, -8); ctx.quadraticCurveTo(15, -5, 18, -6); ctx.stroke();
+  // 눈
+  ctx.fillStyle = angry ? '#ff3838' : '#1a120a';
+  ctx.beginPath(); ctx.arc(11, -14, 1.3, 0, Math.PI*2); ctx.fill();
+  if (hpRatio < 1) {
+    ctx.fillStyle = '#000'; ctx.fillRect(-12, -30, 24, 4);
+    ctx.fillStyle = '#d9273a'; ctx.fillRect(-11, -29, 22 * hpRatio, 2);
+  }
+  ctx.restore();
+}
+
+function drawWolf(ctx, x, y, t, hpRatio, flip) {
+  ctx.save(); ctx.translate(x, y);
+  if (flip) ctx.scale(-1, 1);
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath(); ctx.ellipse(0, 0, 13, 5, 0, 0, Math.PI*2); ctx.fill();
+  const lope = Math.sin(t * 10) * 2;
+  // 다리
+  ctx.strokeStyle = '#141020'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-7, -9); ctx.lineTo(-7 - lope, -1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(6, -9); ctx.lineTo(6 + lope, -1); ctx.stroke();
+  // 몸통 (어둠에 잠긴)
+  const g = ctx.createLinearGradient(0, -24, 0, -6);
+  g.addColorStop(0, '#241a3c'); g.addColorStop(1, '#0e0a1c');
+  ctx.fillStyle = g; ctx.strokeStyle = '#050310'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(-1, -14, 12, 7, -0.08, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  // 꼬리
+  ctx.strokeStyle = '#241a3c'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(-12, -16); ctx.quadraticCurveTo(-18, -20 + lope, -20, -14); ctx.stroke();
+  // 머리
+  ctx.fillStyle = '#1c1430';
+  ctx.beginPath(); ctx.moveTo(8, -20); ctx.lineTo(19, -14); ctx.lineTo(9, -10); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // 귀
+  ctx.beginPath(); ctx.moveTo(8, -20); ctx.lineTo(7, -26); ctx.lineTo(11, -21); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // 붉은 눈
+  ctx.fillStyle = '#ff2f4a';
+  ctx.beginPath(); ctx.arc(11.5, -16.5, 1.6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,47,74,.35)';
+  ctx.beginPath(); ctx.arc(11.5, -16.5, 3.2, 0, Math.PI*2); ctx.fill();
+  if (hpRatio < 1) {
+    ctx.fillStyle = '#000'; ctx.fillRect(-13, -32, 26, 4);
+    ctx.fillStyle = '#d9273a'; ctx.fillRect(-12, -31, 24 * hpRatio, 2);
   }
   ctx.restore();
 }
