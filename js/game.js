@@ -27,6 +27,7 @@ const G = {
   day: 1, t: 0.28,      // t: 하루 진행도 0~1
   shards: 0,
   rain: false, rainT: 0,
+  traderDay: 0,
   questIdx: 0,
   counters: {},         // 미션 카운터
   sound: true,
@@ -44,6 +45,7 @@ const P = {
   inv: [],                       // {id, qty, dur}
   equipTool: -1, equipLight: -1, equipArmor: -1, // inv index
   swing: 0, atkCd: 0,
+  buff: null,                    // {id, n, until} 제단의 축복
   target: null,                  // {kind:'obj'|'mob'|'struct'|'water'|'move', ...}
   actProg: 0,
   str: 10, agi: 11, int: 10, vit: 10, luck: 12,
@@ -189,6 +191,30 @@ function removeSlot(i) {
 function armorDef() {
   return P.equipArmor >= 0 && P.inv[P.equipArmor] ? (ITEMS[P.inv[P.equipArmor].id].def || 0) : 0;
 }
+
+/* ---------- 축복 (제단 버프) ---------- */
+function hasBuff(id) { return P.buff && P.buff.id === id && nowGameTime() < P.buff.until; }
+function grantBlessing(b) {
+  if (b.instant) { // 생명의 은총: 즉시 회복
+    P.hp = P.maxHp; P.ep = 100; P.hunger = 100; P.thirst = 100; P.fatigue = 0;
+    toast(`✨ ${b.n}! ${b.desc}`, '#e0c8ff');
+    return;
+  }
+  P.buff = { id: b.id, n: b.n, until: nowGameTime() + DAY_LEN * 0.5 };
+  toast(`✨ ${b.n}! ${b.desc}`, '#e0c8ff');
+}
+function updateBuff() {
+  if (P.buff && nowGameTime() >= P.buff.until) {
+    toast(`${P.buff.n}의 힘이 사라졌습니다.`, '#8f8b7c');
+    P.buff = null;
+  }
+  const el = $('buff-label');
+  if (P.buff) {
+    const left = Math.max(0, Math.ceil((P.buff.until - nowGameTime())));
+    el.textContent = `✨ ${P.buff.n} (${left}초)`;
+    el.classList.remove('hidden');
+  } else el.classList.add('hidden');
+}
 function hasTool(tool) {
   return P.equipTool >= 0 && ITEMS[P.inv[P.equipTool].id].tool === tool
     ? P.equipTool
@@ -300,9 +326,13 @@ function tapWorld(wx, wy) {
   if (G.gameOver || G.sleeping) return;
   G.taps.push({ x: wx, y: wy, t: 0 }); // 터치 물결
   const tx = Math.round(wx), ty = Math.round(wy);
-  // 1) 몬스터?
+  // 1) 몬스터/NPC?
   const mob = G.mobs.find(m => dist(m.x, m.y, wx, wy) < 0.9);
-  if (mob) { setTargetMob(mob); return; }
+  if (mob) {
+    if (MOBS[mob.type].kind === 'npc') { P.target = { kind: 'npc', mob }; P.path = []; P.actProg = 0; }
+    else setTargetMob(mob);
+    return;
+  }
   // 1.5) 유적?
   const ru = G.ruins.find(u => u.x === tx && u.y === ty);
   if (ru) { setTarget({ kind: 'ruin', ru, x: tx, y: ty }); return; }
@@ -319,6 +349,9 @@ function tapWorld(wx, wy) {
   for (const m of G.mobs) {
     const d = dist(m.x, m.y, wx, wy);
     if (d < bd) { bd = d; best = { mob: m }; }
+  }
+  if (best && best.mob && MOBS[best.mob.type].kind === 'npc') {
+    P.target = { kind: 'npc', mob: best.mob }; P.path = []; P.actProg = 0; return;
   }
   for (const [i, oo] of G.objs) {
     if (oo.dead) continue;
@@ -380,10 +413,11 @@ function doGather(dt) {
       if (ti >= 0) { P.inv[ti].dur -= 1; if (P.inv[ti].dur <= 0) { toast(`${ITEMS[P.inv[ti].id].n}이(가) 부서졌습니다!`, '#ff9d2e'); removeSlot(ti); } }
     }
     if (o.hp <= 0) {
+      const mult = hasBuff('bounty') ? 2 : 1; // 풍요의 축복
       for (const y of def.yields) {
         if (y.p && Math.random() > y.p) continue;
-        addItemStack(y.id, y.q);
-        spawnFloat(t.x, t.y - 0.6, `+${y.q} ${ITEMS[y.id].n}`, '#fff');
+        addItemStack(y.id, y.q * mult);
+        spawnFloat(t.x, t.y - 0.6, `+${y.q * mult} ${ITEMS[y.id].n}`, '#fff');
       }
       gainExp(def.tool ? 6 : 3);
       maybeFindPage(0.03);
@@ -469,6 +503,41 @@ function openStructPanel(st) {
   openPanel('panel-struct');
 }
 
+// 방랑 상인 거래 패널
+function openTradePanel(mob) {
+  $('struct-title').textContent = '🎒 방랑 상인';
+  const box = $('struct-btns');
+  box.innerHTML = '';
+  const sub = document.createElement('div');
+  sub.style.cssText = 'font-size:13px;color:#8f8b7c;margin-bottom:4px';
+  sub.textContent = '"밤이 오기 전에만 거래하지. 뭘 내놓겠나?"';
+  box.appendChild(sub);
+  for (const tr of TRADES) {
+    if (tr.get === 'page' && G.pages.length >= LORE_PAGES.length) continue; // 일기 다 모으면 품절
+    const b = document.createElement('button');
+    b.className = 'menu-btn';
+    const giveTxt = Object.entries(tr.give).map(([id, n]) => `${ITEMS[id].n} ${n}`).join(' + ');
+    const ok = Object.entries(tr.give).every(([id, n]) => invCount(id) >= n);
+    b.textContent = `${tr.label}  ⟵  ${giveTxt}`;
+    if (!ok) { b.style.opacity = 0.45; }
+    b.onclick = () => {
+      if (!Object.entries(tr.give).every(([id, n]) => invCount(id) >= n)) {
+        toast('재료가 부족합니다.', '#ff5252'); return;
+      }
+      for (const [id, n] of Object.entries(tr.give)) removeItems(id, n);
+      if (tr.get === 'page') findPage();
+      else for (const [id, n] of Object.entries(tr.get)) addItemStack(id, n);
+      bumpCounter('trade', 'any');
+      spawnFloat(mob.x, mob.y - 1.4, '거래 완료', '#ffd94d');
+      sfx('craft');
+      updateHud();
+      openTradePanel(mob); // 갱신
+    };
+    box.appendChild(b);
+  }
+  openPanel('panel-struct');
+}
+
 function dismantleStruct(st) {
   const i = G.structs.indexOf(st);
   if (i < 0) return;
@@ -521,15 +590,49 @@ function doInvestigate(dt) {
       if (!isNight()) { toast('오벨리스크의 문양은 낮에는 침묵합니다. 밤에 다시 오세요.', '#b13cff'); P.target = null; return; }
       if (invCount('shard') < 3) { toast('문양이 요구합니다… 어둠의 파편 3개를 바치세요.', '#b13cff'); P.target = null; return; }
     }
+    if (ru.type === 'altar') {
+      if (!isNight()) { toast('제단은 밤에만 깨어납니다.', '#b13cff'); P.target = null; return; }
+      if (ru.lastDay === G.day) { toast('제단은 오늘 밤 이미 응답했습니다.', '#8f8b7c'); P.target = null; return; }
+      if (invCount('shard') < 2) { toast('봉헌할 어둠의 파편 2개가 필요합니다.', '#b13cff'); P.target = null; return; }
+    }
   }
   P.actProg += dt;
   if (P.actProg >= 2.5) {
     P.actProg = 0;
-    openRuin(ru);
+    if (ru.type === 'altar') openAltar(ru); else openRuin(ru);
     P.target = null;
   } else if ((P.actProg * 10 | 0) % 8 === 0) {
     P.swing = 0.6;
   }
+}
+
+// 어둠의 제단: 파편 2 봉헌 → 축복 또는 시련
+function openAltar(ru) {
+  removeItems('shard', 2);
+  ru.lastDay = G.day;
+  bumpCounter('altar', 'any');
+  gainExp(15);
+  toast('파편이 제단의 룬 속으로 녹아듭니다…', '#b13cff');
+  setTimeout(() => {
+    if (G.gameOver) return;
+    if (Math.random() < 0.6) {
+      // 축복
+      const b = BLESSINGS[(Math.random() * BLESSINGS.length) | 0];
+      grantBlessing(b);
+      sfx('quest');
+    } else {
+      // 시련: 몬스터 웨이브
+      toast('⚠ 제단이 분노합니다! 어둠이 몰려옵니다!', '#ff5252');
+      sfx('hurt');
+      const n = 3 + (G.day >= 3 ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        const type = G.day >= 3 && i === 0 ? 'wolf' : 'wisp';
+        spawnCreature(type, 4, 6);
+      }
+    }
+    updateHud(); updateInvPanel();
+    save();
+  }, 900);
 }
 
 function openRuin(ru) {
@@ -767,6 +870,20 @@ function updateMobs(dt) {
     animalTimer = 18 + Math.random() * 12;
     if (!isNight() && animalCount < 4) spawnCreature(Math.random() < 0.65 ? 'rabbit' : 'boar', 7, 13);
   }
+  // 방랑 상인: 2일차부터 하루 한 번 낮에 출현 시도
+  const traderHere = G.mobs.some(m => m.type === 'trader');
+  if (!isNight() && G.day >= 2 && G.traderDay !== G.day && G.t > 0.15 && G.t < 0.45 && !traderHere) {
+    G.traderDay = G.day;
+    if (Math.random() < 0.75 && spawnCreature('trader', 5, 8)) {
+      toast('🎒 어디선가 방울 소리가 들립니다… 방랑 상인이 나타났습니다!', '#ffd94d');
+    }
+  }
+  // 밤이 되면 상인은 떠난다
+  if (isNight() && traderHere) {
+    G.mobs = G.mobs.filter(m => m.type !== 'trader');
+    if (P.target && P.target.kind === 'npc') P.target = null;
+    toast('방랑 상인이 어둠을 피해 떠났습니다.', '#8f8b7c');
+  }
 
   for (const m of G.mobs) {
     m.t += dt;
@@ -845,9 +962,10 @@ function hurtPlayer(rawDmg) {
 
 function playerAttack(mob) {
   if (P.atkCd > 0) return;
+  if (MOBS[mob.type].kind === 'npc') return; // 상인은 공격 불가
   P.atkCd = 0.8; P.swing = 1;
   const weapon = P.equipTool >= 0 ? ITEMS[P.inv[P.equipTool].id] : null;
-  let dmg = 3 + (weapon ? weapon.dmg : 0) + Math.floor(P.str / 5);
+  let dmg = 3 + (weapon ? weapon.dmg : 0) + Math.floor(P.str / 5) + (hasBuff('atk') ? 6 : 0);
   if (Math.random() < 0.08 + P.luck / 200) { dmg *= 2; spawnFloat(mob.x, mob.y - 1.6, '치명타!', '#ffe066'); }
   mob.hp -= dmg; mob.killed = true;
   if (MOBS[mob.type].retaliate) mob.angry = true;
@@ -862,7 +980,10 @@ function playerAttack(mob) {
 
 function attackNearest() {
   let best = null, bd = 2.0;
-  for (const m of G.mobs) { const d = dist(m.x, m.y, P.x, P.y); if (d < bd) { bd = d; best = m; } }
+  for (const m of G.mobs) {
+    if (MOBS[m.type].kind === 'npc') continue;
+    const d = dist(m.x, m.y, P.x, P.y); if (d < bd) { bd = d; best = m; }
+  }
   if (best) { playerAttack(best); }
   else { P.swing = 1; sfx('pick'); }
 }
@@ -951,7 +1072,7 @@ function updatePlayer(dt) {
   if (P.path.length) {
     const n = P.path[0];
     const d = dist(P.x, P.y, n.x, n.y);
-    const speed = 3.4 * (P.fatigue >= 100 ? 0.75 : 1) * (P.ep <= 0 ? 0.7 : 1);
+    const speed = 3.4 * (P.fatigue >= 100 ? 0.75 : 1) * (P.ep <= 0 ? 0.7 : 1) * (hasBuff('speed') ? 1.25 : 1);
     if (d < 0.08) { P.x = n.x; P.y = n.y; P.path.shift(); }
     else {
       P.face = n.x + n.y > P.x + P.y ? 1 : (Math.abs((n.x - P.x) - (n.y - P.y)) < 0.01 ? P.face : ((n.x - n.y) > (P.x - P.y) ? 1 : -1));
@@ -987,6 +1108,14 @@ function updatePlayer(dt) {
     else if (t.kind === 'ruin') {
       if (!nearTarget(t, 1.9)) P.target = null;
       else doInvestigate(dt);
+    }
+    else if (t.kind === 'npc') {
+      if (!G.mobs.includes(t.mob)) { P.target = null; return; }
+      const d = dist(P.x, P.y, t.mob.x, t.mob.y);
+      if (d > 1.5) {
+        const p = findPath(P.x | 0, P.y | 0, Math.round(t.mob.x), Math.round(t.mob.y));
+        if (p && p.length) P.path = [p[0]]; else P.target = null;
+      } else { openTradePanel(t.mob); P.target = null; }
     }
   }
   // 오브젝트 리스폰
@@ -1131,6 +1260,13 @@ function render() {
   ctx.globalAlpha = 1;
 }
 
+// 캐릭터를 가리는 오브젝트 판정 (플레이어보다 앞에 그려지고 화면상 겹침)
+function occludesPlayer(gx, gy, sx, sy, w, h) {
+  if (gx + gy <= P.x + P.y) return false;
+  const pSX = worldSX(P.x, P.y) + camOffset().ox, pSY = worldSY(P.x, P.y) + camOffset().oy;
+  return Math.abs(sx - pSX) < w && sy - pSY > -6 && sy - pSY < h;
+}
+
 function drawObj(o, x, y, ox, oy) {
   const sx = worldSX(x, y) + ox, sy = worldSY(x, y) + oy;
   const map = {
@@ -1142,7 +1278,10 @@ function drawObj(o, x, y, ox, oy) {
   // 채집 중 흔들림
   let shake = 0;
   if (P.target && P.target.o === o && P.actProg > 0.4) shake = Math.sin(animT * 40) * 2;
+  // 캐릭터를 가리는 나무는 반투명하게
+  if (o.type === 'tree' && occludesPlayer(x, y, sx, sy, 46, 95)) ctx.globalAlpha = 0.45;
   ctx.drawImage(spr, sx - ax + shake, sy - ay + 8);
+  ctx.globalAlpha = 1;
 }
 
 function drawStruct(s, ox, oy) {
@@ -1196,15 +1335,27 @@ function drawDestMarker(dx, dy) {
 
 function drawRuin(u, ox, oy) {
   const sx = worldSX(u.x, u.y) + ox, sy = worldSY(u.x, u.y) + oy;
+  // 캐릭터를 가리면 반투명
+  if (occludesPlayer(u.x, u.y, sx, sy, 48, u.type === 'obelisk' ? 105 : 70)) ctx.globalAlpha = 0.45;
   if (u.type === 'dolmen') ctx.drawImage(SPR.dolmen, sx - 42, sy - 60);
   else if (u.type === 'chamber') ctx.drawImage(SPR.chamber, sx - 44, sy - 66);
+  else if (u.type === 'altar') {
+    ctx.drawImage(SPR.altar, sx - 32, sy - 50);
+    if (isNight() && u.lastDay !== G.day) { // 밤에 룬이 깨어남
+      ctx.fillStyle = `rgba(177,60,255,${0.3 + Math.sin(animT * 3) * 0.2})`;
+      ctx.beginPath(); ctx.arc(sx - 6, sy - 38, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx + 10, sy - 38, 4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
   else if (u.type === 'obelisk') {
     ctx.drawImage(SPR.obelisk, sx - 28, sy - 100);
     if (!u.opened) { // 문양 맥동
+      ctx.globalAlpha = 1;
       ctx.fillStyle = `rgba(177,60,255,${0.25 + Math.sin(animT * 2.5) * 0.2})`;
       ctx.beginPath(); ctx.arc(sx, sy - 34, 6, 0, Math.PI * 2); ctx.fill();
     }
   }
+  ctx.globalAlpha = 1;
   // 미조사 유적 반짝임
   if (!u.opened && u.type !== 'obelisk') {
     ctx.globalAlpha = 0.5 + Math.sin(animT * 3 + u.x) * 0.4;
@@ -1219,7 +1370,8 @@ function drawCreature(m, ox, oy) {
   const sx = worldSX(m.x, m.y) + ox, sy = worldSY(m.x, m.y) + oy;
   const r = m.hp / m.maxHp;
   const flip = m.face < 0;
-  if (m.type === 'rabbit') drawRabbit(ctx, sx, sy, m.t, r, flip);
+  if (m.type === 'trader') drawTrader(ctx, sx, sy, m.t, flip);
+  else if (m.type === 'rabbit') drawRabbit(ctx, sx, sy, m.t, r, flip);
   else if (m.type === 'boar') drawBoar(ctx, sx, sy, m.t, r, flip, m.angry);
   else if (m.type === 'wolf') drawWolf(ctx, sx, sy, m.t, r, flip);
   else drawMob(ctx, sx, sy, m.t, r);
@@ -1267,7 +1419,8 @@ function drawDarkness(ox, oy) {
   dctx.globalCompositeOperation = 'destination-out';
   const lights = [];
   // 플레이어 기본 시야
-  const nightBase = invCount('starHeart') > 0 ? 3.6 : 2.2; // 별의 심장: 밤 시야 확장
+  let nightBase = invCount('starHeart') > 0 ? 3.6 : 2.2; // 별의 심장: 밤 시야 확장
+  if (hasBuff('sight')) nightBase += 2;                    // 별빛의 축복
   lights.push({ x: P.x, y: P.y, r: alpha > 0.5 ? nightBase : 8, warm: false });
   if (P.equipLight >= 0 && P.inv[P.equipLight])
     lights.push({ x: P.x, y: P.y, r: ITEMS[P.inv[P.equipLight].id].light || 4.6, warm: true });
@@ -1275,10 +1428,11 @@ function drawDarkness(ox, oy) {
     const def = STRUCTS[s.type];
     if (def.light && s.lit && (!def.life || s.life > 0)) lights.push({ x: s.x, y: s.y, r: def.light, warm: true });
   }
-  // 미개봉 오벨리스크는 밤에 스스로 희미하게 빛난다 (멀리서 보이는 등대)
+  // 미개봉 오벨리스크·깨어난 제단은 밤에 스스로 희미하게 빛난다 (멀리서 보이는 등대)
   if (alpha > 0.4) {
     for (const u of G.ruins) {
       if (u.type === 'obelisk' && !u.opened) lights.push({ x: u.x, y: u.y, r: 2.2, purple: true });
+      if (u.type === 'altar' && u.lastDay !== G.day) lights.push({ x: u.x, y: u.y, r: 1.7, purple: true });
     }
   }
   for (const l of lights) {
@@ -1335,11 +1489,13 @@ function drawLabels(ox, oy) {
     if (dist(u.x, u.y, P.x, P.y) > 6) continue;
     const sx = worldSX(u.x, u.y) + ox, sy = worldSY(u.x, u.y) + oy;
     const def = RUIN_DEFS[u.type];
-    let hint = u.opened ? ' (조사 완료)'
+    let hint = u.type === 'altar'
+      ? (!isNight() ? ' (밤에만)' : u.lastDay === G.day ? ' (침묵)' : ' (봉헌: 파편 2)')
+      : u.opened ? ' (조사 완료)'
       : def.tier === 2 ? ' ⛏'
       : def.tier === 3 ? (isNight() ? ' (봉헌: 파편 3)' : ' (밤에만)')
       : ' (조사)';
-    const yOff = u.type === 'obelisk' ? 108 : 74;
+    const yOff = u.type === 'obelisk' ? 108 : u.type === 'altar' ? 58 : 74;
     ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillText(def.n + hint, sx + 1, sy - yOff + 1);
     ctx.fillStyle = u.opened ? '#8f8b7c' : '#c9a2ff'; ctx.fillText(def.n + hint, sx, sy - yOff);
   }
@@ -1597,11 +1753,12 @@ function save() {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       seed: worldSeed, day: G.day, t: G.t, shards: G.shards, questIdx: G.questIdx,
       counters: G.counters, structs: G.structs, sound: G.sound, objs: objsArr,
-      rain: G.rain, rainT: G.rainT,
+      rain: G.rain, rainT: G.rainT, traderDay: G.traderDay,
       ruins: G.ruins, pages: G.pages, blueprints: G.blueprints, newPages: G.newPages,
       p: { x: P.x, y: P.y, level: P.level, exp: P.exp, hp: P.hp, maxHp: P.maxHp,
            ep: P.ep, hunger: P.hunger, thirst: P.thirst, fatigue: P.fatigue, temp: P.temp,
            inv: P.inv, equipTool: P.equipTool, equipLight: P.equipLight, equipArmor: P.equipArmor,
+           buff: P.buff,
            str: P.str, agi: P.agi, int: P.int, vit: P.vit, luck: P.luck },
     }));
   } catch (e) { /* 저장 공간 부족 등 */ }
@@ -1620,8 +1777,16 @@ function load() {
     G.counters = d.counters || {}; G.structs = d.structs || []; G.sound = d.sound !== false;
     G.rain = !!d.rain; G.rainT = d.rainT || 0;
     // 유적: 구버전 저장엔 없음 → genWorld가 만든 것을 유지하되 구조물과 겹치면 제거
-    if (d.ruins) G.ruins = d.ruins;
+    const genRuins = G.ruins;
+    if (d.ruins) {
+      G.ruins = d.ruins;
+      // 구버전 저장에 제단이 없으면 새로 생성된 제단을 추가 (콘텐츠 마이그레이션)
+      if (!G.ruins.some(u => u.type === 'altar')) {
+        for (const u of genRuins) if (u.type === 'altar') G.ruins.push(u);
+      }
+    }
     G.ruins = G.ruins.filter(u => !G.structs.some(s => s.x === u.x && s.y === u.y));
+    G.traderDay = d.traderDay || 0;
     G.pages = d.pages || [];
     G.blueprints = d.blueprints || [];
     G.newPages = d.newPages || 0;
@@ -1704,7 +1869,7 @@ function loop(ts) {
   }
   render();
   hudTimer -= dt;
-  if (hudTimer <= 0) { hudTimer = 0.2; updateHud(); }
+  if (hudTimer <= 0) { hudTimer = 0.2; updateHud(); updateBuff(); }
   saveTimer += dt;
   if (saveTimer > 15) { saveTimer = 0; save(); }
   requestAnimationFrame(loop);

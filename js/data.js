@@ -50,7 +50,25 @@ const RUIN_DEFS = {
   dolmen:  { n:'고인돌',        tier:1, count:3 },
   chamber: { n:'무너진 석실',   tier:2, count:2 },
   obelisk: { n:'검은 오벨리스크', tier:3, count:1 },
+  altar:   { n:'어둠의 제단',   tier:4, count:2 },  // 반복 사용 가능 (밤, 파편 2 봉헌)
 };
+
+// ===== 제단의 축복 =====
+const BLESSINGS = [
+  { id:'atk',    n:'힘의 축복',   desc:'공격력이 크게 오른다' },
+  { id:'speed',  n:'바람의 축복', desc:'발걸음이 가벼워진다' },
+  { id:'sight',  n:'별빛의 축복', desc:'어둠 속에서도 멀리 보인다' },
+  { id:'bounty', n:'풍요의 축복', desc:'채집량이 2배가 된다' },
+  { id:'heal',   n:'생명의 은총', desc:'몸과 마음이 온전히 회복된다', instant:true },
+];
+
+// ===== 방랑 상인 거래 목록 =====
+const TRADES = [
+  { give:{ shard:2 }, get:{ iron:1 },  label:'철괴 1' },
+  { give:{ hide:2 },  get:{ shard:1 }, label:'어둠의 파편 1' },
+  { give:{ shard:1 }, get:{ torch:2 }, label:'횃불 2' },
+  { give:{ shard:5 }, get:'page',      label:'낡은 일기 한 장' },
+];
 
 // ===== 먼저 온 자의 일기 (12장) =====
 const LORE_PAGES = [
@@ -184,6 +202,12 @@ const QUESTS = [
   { title:'별 아래 잠든 것', exp:300, lines:[
     { t:'일기 12장 전부 모으기', type:'pages', key:'any', n:12 },
   ]},
+  { title:'수상한 방문자', exp:80, lines:[
+    { t:'방랑 상인과 거래하기 (2일차부터 낮에 출현)', type:'trade', key:'any', n:1 },
+  ]},
+  { title:'어둠과의 거래', exp:120, lines:[
+    { t:'어둠의 제단에 봉헌하기 (밤, 파편 2개)', type:'altar', key:'any', n:1 },
+  ]},
 ];
 
 // ===== 생물 =====
@@ -196,6 +220,7 @@ const MOBS = {
             drops:[{id:'shard', q:2, p:1}, {id:'hide', q:1, p:0.6}] },
   rabbit: { n:'토끼',       kind:'animal', hp:8,  dmg:0,  speed:3.1, exp:8, flee:true,
             drops:[{id:'rawMeat', q:1, p:1}, {id:'hide', q:1, p:0.5}] },
+  trader: { n:'방랑 상인',   kind:'npc',   hp:999, dmg:0,  speed:1.2, exp:0, drops:[] },
   boar:   { n:'멧돼지',     kind:'animal', hp:34, dmg:8,  speed:2.4, exp:25, retaliate:true,
             drops:[{id:'rawMeat', q:2, p:1}, {id:'hide', q:1, p:1}] },
 };

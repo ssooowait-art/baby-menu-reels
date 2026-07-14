@@ -344,6 +344,21 @@ s.sSSSSSSs.s
 ..rr.ss..__..ss..rr...`,
     { s: '#3c3830', S: '#6a6a60', L: '#7e7e72', _: '#0c0a08', r: '#5c5c54' }, PXS, 4);
 
+  // 어둠의 제단 (룬이 새겨진 돌 제단)
+  SPR.altar = pxSpr(64, 60, `
+....gg....gg....
+.ssssssssssssss.
+sSSSSSgSSgSSSSSs
+.ssssssssssssss.
+....sSSSSSSs....
+....sSSgSSSs....
+....sSSSSSSs....
+....sSSSSSSs....
+..ssssssssssss..
+.sSSSSSSSSSSSSs.
+.ssssssssssssss.`,
+    { s: '#2c2834', S: '#4a4456', g: '#8a3cd9' }, PXS, 4);
+
   SPR.obelisk = pxSpr(56, 110, `
 ....PP....
 ...pkkp...
@@ -789,6 +804,36 @@ mbbbbbbbbhhhh.
 ..bb..bb.b....`,
   ].map(m => pxSpr(60, 40, m, { m: '#3c2c1a', b: '#5c4630', h: '#6e5238', E: C.eye, n: '#8a6a4a', t: C.bone }, PXS, 0));
 
+  // 방랑 상인 (두건 쓴 행상)
+  MOB_SPRITES.trader = [`
+...rrrr...
+..rrrrrr..
+..rSSSSr..
+..rSeSer..
+...SSSS...
+..rrrrrr..
+.rrrrrrrr.
+.rrrrrrrB.
+.rrrrrrBB.
+.rrrrrrBB.
+..rr..rr..
+..rr..rr..
+.LL....LL.`, `
+...rrrr...
+..rrrrrr..
+..rSSSSr..
+..rSeSer..
+...SSSS...
+..rrrrrr..
+.rrrrrrrr.
+.rrrrrrrB.
+.rrrrrrBB.
+.rrrrrrBB.
+...rr.rr..
+...rr.rr..
+..LL...LL.`,
+  ].map(m => pxSpr(44, 58, m, { r: '#5c4630', S: '#d69a68', e: '#1a120a', B: '#8a6a3e', L: '#4a3620' }, PXS, 0));
+
   MOB_SPRITES.wolf = [`
 .k.........k.
 .kk..kkkkkkE.
@@ -834,5 +879,6 @@ function drawMob(ctx, x, y, t, hpRatio) { drawCreaturePix(ctx, 'wisp', x, y, t, 
 function drawRabbit(ctx, x, y, t, hpRatio, flip) { drawCreaturePix(ctx, 'rabbit', x, y, t, hpRatio, flip); }
 function drawBoar(ctx, x, y, t, hpRatio, flip, angry) { drawCreaturePix(ctx, 'boar', x, y, t, hpRatio, flip, { angry }); }
 function drawWolf(ctx, x, y, t, hpRatio, flip) { drawCreaturePix(ctx, 'wolf', x, y, t, hpRatio, flip); }
+function drawTrader(ctx, x, y, t, flip) { drawCreaturePix(ctx, 'trader', x, y, t, 1, flip); }
 
 function initSprites() { makeTiles(); makeObjects(); makeStructs(); makeIcons(); makePlayer(); makeMobs(); }
