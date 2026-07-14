@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>야생의 어둠 — 생존</title>
+<meta name="theme-color" content="#0b0d0a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="야생의 어둠">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="game-wrap">
+  <canvas id="game"></canvas>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud">
+    <!-- top-left : environment -->
+    <div id="env">
+      <div id="thermo"><span id="temp-val">22</span><div id="thermo-icon">🌡</div></div>
+      <div id="clock-wrap">
+        <canvas id="clock" width="72" height="72"></canvas>
+        <div id="day-label">1 DAYS</div>
+      </div>
+      <div id="shard-wrap"><div id="shard-icon">✦</div><div id="shard-count">0</div></div>
+    </div>
+
+    <!-- missions -->
+    <div id="missions">
+      <div id="mission-title">시작 미션</div>
+      <div id="mission-lines"></div>
+    </div>
+
+    <!-- top-center : level & gauges -->
+    <div id="top-center">
+      <div id="lv-label">LV 1</div>
+      <div id="gauges">
+        <div class="gauge" id="g-hp"><div class="g-fill"></div><span class="g-ico">HP</span></div>
+        <div class="gauge" id="g-ep"><div class="g-fill"></div><span class="g-ico">EP</span></div>
+        <div class="gauge" id="g-hunger"><div class="g-fill"></div><span class="g-ico">🍖</span></div>
+        <div class="gauge" id="g-thirst"><div class="g-fill"></div><span class="g-ico">💧</span></div>
+        <div class="gauge" id="g-fatigue"><div class="g-fill"></div><span class="g-ico">😪</span></div>
+      </div>
+      <div id="toast-area"></div>
+    </div>
+
+    <!-- top-right -->
+    <button class="round-btn" id="btn-bag" title="가방">🎒</button>
+
+    <!-- left column -->
+    <div id="left-col">
+      <button class="round-btn small" id="btn-settings" title="설정">⚙</button>
+      <button class="round-btn small" id="btn-char" title="캐릭터">📜</button>
+      <button class="round-btn small" id="btn-journal" title="먼저 온 자의 기록">📖<span id="journal-badge" class="hidden"></span></button>
+    </div>
+
+    <!-- right column -->
+    <div id="right-col">
+      <button class="round-btn" id="btn-craft" title="제작">⚒</button>
+      <button class="round-btn" id="btn-wait" title="휴식">⏱</button>
+    </div>
+
+    <!-- bottom-left : quick slots -->
+    <div id="quickslots">
+      <div class="qslot" id="qs-light"><canvas width="52" height="52"></canvas><div class="qs-dur"></div></div>
+      <div class="qslot" id="qs-tool"><canvas width="52" height="52"></canvas><div class="qs-dur"></div></div>
+    </div>
+
+    <!-- bottom-right : attack -->
+    <button id="btn-attack">👊</button>
+  </div>
+
+  <!-- ===== Panels ===== -->
+  <div class="panel hidden" id="panel-inv">
+    <div class="panel-head"><div class="panel-title">가방</div><button class="panel-close" data-close="panel-inv">✕</button></div>
+    <div id="inv-grid"></div>
+    <div id="inv-info" class="hidden">
+      <div id="inv-info-name"></div>
+      <div id="inv-info-desc"></div>
+      <div id="inv-info-btns"></div>
+    </div>
+  </div>
+
+  <div class="panel hidden" id="panel-craft">
+    <div class="panel-head"><div class="panel-title">제작</div><button class="panel-close" data-close="panel-craft">✕</button></div>
+    <div id="craft-tabs"></div>
+    <div id="craft-list"></div>
+  </div>
+
+  <div class="panel hidden" id="panel-char">
+    <div class="panel-head">
+      <div class="panel-title" id="char-title">레벨. 1&nbsp;&nbsp;직업: 모험가</div>
+      <button class="panel-close" data-close="panel-char">✕</button>
+    </div>
+    <div id="char-cols"></div>
+    <div id="char-exp"><div id="char-exp-fill"></div><span id="char-exp-label"></span></div>
+  </div>
+
+  <div class="panel hidden" id="panel-journal">
+    <div class="panel-head"><div class="panel-title">📖 먼저 온 자의 기록</div><button class="panel-close" data-close="panel-journal">✕</button></div>
+    <div id="journal-sub">유적을 조사하고 섬을 탐험하며 흩어진 일기를 모으세요.</div>
+    <div id="journal-grid"></div>
+    <div id="journal-read" class="hidden">
+      <div id="journal-read-title"></div>
+      <div id="journal-read-body"></div>
+    </div>
+  </div>
+
+  <div class="panel hidden" id="panel-struct" style="width:min(92vw,420px)">
+    <div class="panel-head"><div class="panel-title" id="struct-title">구조물</div><button class="panel-close" data-close="panel-struct">✕</button></div>
+    <div id="struct-btns" style="display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+
+  <div class="panel hidden" id="panel-settings">
+    <div class="panel-head"><div class="panel-title">설정</div><button class="panel-close" data-close="panel-settings">✕</button></div>
+    <div id="settings-body">
+      <button class="menu-btn" id="set-save">💾 저장하기</button>
+      <button class="menu-btn" id="set-sound">🔊 소리: 켜짐</button>
+      <button class="menu-btn" id="set-help">❔ 도움말</button>
+      <button class="menu-btn danger" id="set-reset">☠ 처음부터 시작</button>
+    </div>
+  </div>
+
+  <div class="panel hidden" id="panel-help">
+    <div class="panel-head"><div class="panel-title">도움말</div><button class="panel-close" data-close="panel-help">✕</button></div>
+    <div id="help-body">
+      <p>· 땅을 탭하면 이동하고, 자원을 탭하면 채집합니다.</p>
+      <p>· 나무는 <b>돌도끼</b>, 바위는 <b>돌곡괭이</b>가 있어야 캘 수 있습니다.</p>
+      <p>· 물가를 탭하면 물을 마셔 갈증을 해소합니다.</p>
+      <p>· 밤에는 어둠 속에서 <b>어둠의 정령</b>이 나타납니다. 횃불이나 모닥불 곁은 안전합니다.</p>
+      <p>· 모닥불을 탭하면 요리를 할 수 있고, 침낭을 탭하면 잠을 자 아침까지 시간을 보냅니다.</p>
+      <p>· 배고픔·갈증이 0이 되면 체력이 줄어듭니다. 몸을 따뜻하게 유지하세요.</p>
+    </div>
+  </div>
+
+  <!-- overlays -->
+  <div id="overlay-death" class="overlay hidden">
+    <div class="overlay-box">
+      <div class="overlay-title">☠ 사망</div>
+      <div class="overlay-msg">당신은 어둠 속에서 쓰러졌습니다...</div>
+      <div class="overlay-sub" id="death-stats"></div>
+      <button class="menu-btn" id="btn-revive">모닥불 곁에서 눈을 뜬다</button>
+    </div>
+  </div>
+
+  <div id="overlay-sleep" class="overlay hidden">
+    <div class="overlay-box"><div class="overlay-title">💤</div><div class="overlay-msg">잠을 자는 중...</div></div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/game.js"></script>
+<script>
+// PWA 서비스 워커 (http/https에서만 — 파일/샌드박스 환경에선 조용히 건너뜀)
+try {
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+} catch (e) { /* 미지원 환경 */ }
+</script>
+</body>
+</html>
