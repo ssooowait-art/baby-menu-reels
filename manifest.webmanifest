@@ -1,0 +1,16 @@
+{
+  "name": "야생의 어둠 — 생존",
+  "short_name": "야생의 어둠",
+  "description": "픽셀 아트 아이소메트릭 생존 게임 — 채집, 제작, 유적 탐사, 그리고 밤의 어둠",
+  "start_url": ".",
+  "scope": ".",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b0d0a",
+  "theme_color": "#0b0d0a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

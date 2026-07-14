@@ -20,12 +20,12 @@ canvas { image-rendering:pixelated; }
 .round-btn.small { width:52px; height:52px; font-size:22px; }
 .round-btn:active { transform:scale(.93); }
 
-#btn-bag { position:absolute; top:14px; right:14px; }
-#left-col { position:absolute; left:14px; top:42%; display:flex; flex-direction:column; gap:16px; }
-#right-col { position:absolute; right:16px; top:44%; display:flex; flex-direction:column; gap:18px; }
+#btn-bag { position:absolute; top:calc(14px + env(safe-area-inset-top, 0px)); right:calc(14px + env(safe-area-inset-right, 0px)); }
+#left-col { position:absolute; left:calc(14px + env(safe-area-inset-left, 0px)); top:42%; display:flex; flex-direction:column; gap:16px; }
+#right-col { position:absolute; right:calc(16px + env(safe-area-inset-right, 0px)); top:44%; display:flex; flex-direction:column; gap:18px; }
 
 /* env top-left */
-#env { position:absolute; top:10px; left:12px; display:flex; align-items:flex-start; gap:10px; }
+#env { position:absolute; top:calc(10px + env(safe-area-inset-top, 0px)); left:calc(12px + env(safe-area-inset-left, 0px)); display:flex; align-items:flex-start; gap:10px; }
 #thermo { width:34px; height:78px; background:#141410; border:2px solid #2e2e24; border-radius:16px;
   display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:6px 0; }
 #temp-val { font-size:14px; color:#ffd94d; font-weight:bold; }
@@ -64,14 +64,14 @@ canvas { image-rendering:pixelated; }
 @keyframes toast-in { from { opacity:0; transform:translateY(-8px);} }
 
 /* quick slots */
-#quickslots { position:absolute; left:16px; bottom:16px; display:flex; gap:12px; pointer-events:auto; }
+#quickslots { position:absolute; left:calc(16px + env(safe-area-inset-left, 0px)); bottom:calc(16px + env(safe-area-inset-bottom, 0px)); display:flex; gap:12px; pointer-events:auto; }
 .qslot { position:relative; width:64px; height:64px; border-radius:12px; background:#1d1d16;
   border:3px solid #3a3a2c; box-shadow:0 3px 8px rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; cursor:pointer; }
 .qslot.active { border-color:#ffd94d; background:#2d2a18; }
 .qslot .qs-dur { position:absolute; bottom:2px; left:4px; right:4px; height:4px; border-radius:2px; background:#4caf50; }
 .qslot canvas { pointer-events:none; }
 
-#btn-attack { position:absolute; right:20px; bottom:20px; width:84px; height:84px; border-radius:18px;
+#btn-attack { position:absolute; right:calc(20px + env(safe-area-inset-right, 0px)); bottom:calc(20px + env(safe-area-inset-bottom, 0px)); width:84px; height:84px; border-radius:18px;
   background:radial-gradient(circle at 35% 30%, #3c3931, #1c1a14); border:3px solid #0e0d09;
   font-size:38px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.7); }
 #btn-attack:active { transform:scale(.93); }
@@ -162,4 +162,21 @@ canvas { image-rendering:pixelated; }
   .round-btn { width:54px; height:54px; font-size:24px; }
   #btn-attack { width:70px; height:70px; font-size:32px; }
   #missions { max-width:220px; font-size:12px; }
+}
+
+/* 세로(포트레이트) 모바일: HUD 겹침 방지 */
+@media (orientation:portrait) and (max-width:600px) {
+  .gauge { width:36px; height:36px; }
+  .gauge .g-ico { font-size:12px; }
+  #lv-label { font-size:17px; }
+  #clock-wrap { width:56px; }
+  #clock { width:56px; height:56px; }
+  #thermo { width:28px; height:64px; }
+  #missions { top:88px; max-width:170px; }
+  #mission-lines { font-size:12px; }
+  #shard-wrap { margin-left:28px; }
+  #day-label { left:40px; font-size:10px; }
+  .qslot { width:54px; height:54px; }
+  #toast-area .toast { font-size:15px; }
+  .panel { padding:10px 12px 14px; }
 }

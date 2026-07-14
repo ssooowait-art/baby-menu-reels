@@ -1163,8 +1163,12 @@ function drawRain() {
 const darkCanvas = document.createElement('canvas');
 function drawDarkness(ox, oy) {
   const alpha = darknessAlpha();
-  darkCanvas.width = VW; darkCanvas.height = VH;
+  // 캔버스 재할당은 크기 변경 때만 (모바일 성능)
+  if (darkCanvas.width !== VW || darkCanvas.height !== VH) {
+    darkCanvas.width = VW; darkCanvas.height = VH;
+  }
   const dctx = darkCanvas.getContext('2d');
+  dctx.clearRect(0, 0, VW, VH);
   // 기본 비네트(낮에도 가장자리 어둡게 - 원작 느낌)
   const vg = dctx.createRadialGradient(VW/2, VH/2, Math.min(VW,VH)*0.32, VW/2, VH/2, Math.max(VW,VH)*0.72);
   vg.addColorStop(0, `rgba(0,0,0,${alpha})`);

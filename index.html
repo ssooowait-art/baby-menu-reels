@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>야생의 어둠 — 생존</title>
+<meta name="theme-color" content="#0b0d0a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="야생의 어둠">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
@@ -150,5 +158,13 @@
 <script src="js/data.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/game.js"></script>
+<script>
+// PWA 서비스 워커 (http/https에서만 — 파일/샌드박스 환경에선 조용히 건너뜀)
+try {
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+} catch (e) { /* 미지원 환경 */ }
+</script>
 </body>
 </html>
