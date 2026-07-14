@@ -992,6 +992,7 @@ function resize() {
   VW = window.innerWidth; VH = window.innerHeight;
   canvas.width = VW * DPR; canvas.height = VH * DPR;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.imageSmoothingEnabled = false; // 도트 아트 크리스프 유지
 }
 window.addEventListener('resize', resize);
 
@@ -1417,7 +1418,9 @@ function updateCraftPanel() {
       const m = document.createElement('div');
       m.className = 'cc-mat' + (have < n ? ' lack' : '');
       const mc = document.createElement('canvas'); mc.width = 20; mc.height = 20;
-      mc.getContext('2d').drawImage(SPR.icons[id], 0, 0, 40, 40, 0, 0, 20, 20);
+      const mctx = mc.getContext('2d');
+      mctx.imageSmoothingEnabled = false;
+      mctx.drawImage(SPR.icons[id], 0, 0, 40, 40, 0, 0, 20, 20);
       m.appendChild(mc);
       m.appendChild(document.createTextNode(n));
       m.title = ITEMS[id].n;

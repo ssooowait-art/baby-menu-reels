@@ -4,6 +4,7 @@ body { font-family:'Gowun Dodum','Jua',sans-serif; color:#e8e4d8; user-select:no
 
 #game-wrap { position:fixed; inset:0; }
 #game { position:absolute; inset:0; width:100%; height:100%; display:block; }
+canvas { image-rendering:pixelated; }
 
 /* ================= HUD ================= */
 #hud { position:absolute; inset:0; pointer-events:none; }
