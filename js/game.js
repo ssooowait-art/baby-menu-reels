@@ -23,6 +23,7 @@ const G = {
   newPages: 0,          // 안 읽은 일기 수 (배지)
   mobs: [],
   floats: [],           // {x,y,txt,color,t}
+  taps: [],             // 터치 물결 이펙트 {x,y,t}
   day: 1, t: 0.28,      // t: 하루 진행도 0~1
   shards: 0,
   rain: false, rainT: 0,
@@ -297,9 +298,10 @@ function spawnFloat(x, y, txt, color) {
 /* ---------- 행동 ---------- */
 function tapWorld(wx, wy) {
   if (G.gameOver || G.sleeping) return;
+  G.taps.push({ x: wx, y: wy, t: 0 }); // 터치 물결
   const tx = Math.round(wx), ty = Math.round(wy);
   // 1) 몬스터?
-  const mob = G.mobs.find(m => dist(m.x, m.y, wx, wy) < 0.8);
+  const mob = G.mobs.find(m => dist(m.x, m.y, wx, wy) < 0.9);
   if (mob) { setTargetMob(mob); return; }
   // 1.5) 유적?
   const ru = G.ruins.find(u => u.x === tx && u.y === ty);
@@ -312,9 +314,31 @@ function tapWorld(wx, wy) {
   if (o && !o.dead) { setTarget({ kind: 'obj', o, x: tx, y: ty }); return; }
   // 4) 물?
   if (inMap(tx, ty) && G.tiles[idx(tx, ty)] === 1) { setTarget({ kind: 'water', x: tx, y: ty }); return; }
+  // 4.5) 팻 핑거 보정: 살짝 빗맞혀도 근처 대상 자동 선택
+  let best = null, bd = 0.95;
+  for (const m of G.mobs) {
+    const d = dist(m.x, m.y, wx, wy);
+    if (d < bd) { bd = d; best = { mob: m }; }
+  }
+  for (const [i, oo] of G.objs) {
+    if (oo.dead) continue;
+    const x = i % MAP, y = (i / MAP) | 0;
+    const d = dist(x, y, wx, wy);
+    if (d < bd) { bd = d; best = { kind: 'obj', o: oo, x, y }; }
+  }
+  for (const u of G.ruins) {
+    const d = dist(u.x, u.y, wx, wy);
+    if (d < bd) { bd = d; best = { kind: 'ruin', ru: u, x: u.x, y: u.y }; }
+  }
+  for (const s of G.structs) {
+    const d = dist(s.x, s.y, wx, wy);
+    if (d < bd) { bd = d; best = { kind: 'struct', st: s, x: s.x, y: s.y }; }
+  }
+  if (best) { best.mob ? setTargetMob(best.mob) : setTarget(best); return; }
   // 5) 이동
   const p = findPath(P.x | 0, P.y | 0, tx, ty);
   if (p) { P.path = p; P.target = null; P.actProg = 0; }
+  else toast('그곳엔 갈 수 없습니다.');
 }
 function setTarget(t) {
   const p = pathToAdjacent(t.x, t.y);
@@ -1024,6 +1048,17 @@ function render() {
     }
   }
 
+  // 경로 점 & 목적지 마커 (타일 위, 오브젝트 아래)
+  if (P.path.length) {
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    for (const n of P.path) {
+      const px = worldSX(n.x, n.y) + ox, py = worldSY(n.x, n.y) + oy;
+      ctx.fillRect(px - 3, py - 2, 6, 4);
+    }
+    const dn = P.path[P.path.length - 1];
+    drawDestMarker(worldSX(dn.x, dn.y) + ox, worldSY(dn.x, dn.y) + oy);
+  }
+
   // 드로어블 수집 & 정렬
   const draws = [];
   for (const [i, o] of G.objs) {
@@ -1043,6 +1078,42 @@ function render() {
 
   // 어둠 & 빛
   drawDarkness(ox, oy);
+
+  // 타깃 강조 링 (어둠 위에 그려 밤에도 보임)
+  if (P.target) {
+    const t = P.target;
+    const gx = t.kind === 'mob' ? t.mob.x : t.x;
+    const gy = t.kind === 'mob' ? t.mob.y : t.y;
+    const sx0 = worldSX(gx, gy) + ox, sy0 = worldSY(gx, gy) + oy;
+    const pulse = 1 + Math.sin(animT * 8) * 0.12;
+    ctx.strokeStyle = t.kind === 'mob' ? '#ff5252' : '#ffd94d';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(sx0, sy0 - 15 * pulse); ctx.lineTo(sx0 + 30 * pulse, sy0);
+    ctx.lineTo(sx0, sy0 + 15 * pulse); ctx.lineTo(sx0 - 30 * pulse, sy0);
+    ctx.closePath(); ctx.stroke();
+    // 작업 진행 바
+    if (P.actProg > 0 && P.path.length === 0) {
+      const total = t.kind === 'ruin' ? 2.5 : t.kind === 'water' ? 3 : 0.55;
+      const ratio = clamp(P.actProg / total, 0, 1);
+      ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(sx0 - 20, sy0 - 46, 40, 7);
+      ctx.fillStyle = '#ffd94d'; ctx.fillRect(sx0 - 19, sy0 - 45, 38 * ratio, 5);
+    }
+  }
+
+  // 터치 물결
+  for (const tp of G.taps) {
+    const a = 1 - tp.t / 0.45;
+    if (a <= 0) continue;
+    const r = 8 + tp.t * 140;
+    const px = worldSX(tp.x, tp.y) + ox, py = worldSY(tp.x, tp.y) + oy;
+    ctx.strokeStyle = `rgba(255,255,255,${a * 0.8})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(px, py - r * 0.5); ctx.lineTo(px + r, py);
+    ctx.lineTo(px, py + r * 0.5); ctx.lineTo(px - r, py);
+    ctx.closePath(); ctx.stroke();
+  }
 
   // 근처 오브젝트 라벨
   drawLabels(ox, oy);
@@ -1104,6 +1175,23 @@ function drawStruct(s, ox, oy) {
       }
     }
   }
+}
+
+// 목적지 마커: 노란 다이아 + 튀는 화살표
+function drawDestMarker(dx, dy) {
+  const pulse = 1 + Math.sin(animT * 6) * 0.15;
+  ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(dx, dy - 14 * pulse); ctx.lineTo(dx + 27 * pulse, dy);
+  ctx.lineTo(dx, dy + 14 * pulse); ctx.lineTo(dx - 27 * pulse, dy);
+  ctx.closePath(); ctx.stroke();
+  const bounce = Math.abs(Math.sin(animT * 5)) * 8;
+  ctx.fillStyle = '#ffe066';
+  ctx.beginPath();
+  ctx.moveTo(dx, dy - 20 - bounce);
+  ctx.lineTo(dx - 7, dy - 33 - bounce);
+  ctx.lineTo(dx + 7, dy - 33 - bounce);
+  ctx.closePath(); ctx.fill();
 }
 
 function drawRuin(u, ox, oy) {
@@ -1608,6 +1696,11 @@ function loop(ts) {
   for (let i = G.floats.length - 1; i >= 0; i--) {
     G.floats[i].t += dt;
     if (G.floats[i].t > 1.6) G.floats.splice(i, 1);
+  }
+  // 터치 물결
+  for (let i = G.taps.length - 1; i >= 0; i--) {
+    G.taps[i].t += dt;
+    if (G.taps[i].t > 0.45) G.taps.splice(i, 1);
   }
   render();
   hudTimer -= dt;
