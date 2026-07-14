@@ -50,6 +50,7 @@
     <div id="left-col">
       <button class="round-btn small" id="btn-settings" title="설정">⚙</button>
       <button class="round-btn small" id="btn-char" title="캐릭터">📜</button>
+      <button class="round-btn small" id="btn-journal" title="먼저 온 자의 기록">📖<span id="journal-badge" class="hidden"></span></button>
     </div>
 
     <!-- right column -->
@@ -92,6 +93,16 @@
     </div>
     <div id="char-cols"></div>
     <div id="char-exp"><div id="char-exp-fill"></div><span id="char-exp-label"></span></div>
+  </div>
+
+  <div class="panel hidden" id="panel-journal">
+    <div class="panel-head"><div class="panel-title">📖 먼저 온 자의 기록</div><button class="panel-close" data-close="panel-journal">✕</button></div>
+    <div id="journal-sub">유적을 조사하고 섬을 탐험하며 흩어진 일기를 모으세요.</div>
+    <div id="journal-grid"></div>
+    <div id="journal-read" class="hidden">
+      <div id="journal-read-title"></div>
+      <div id="journal-read-body"></div>
+    </div>
   </div>
 
   <div class="panel hidden" id="panel-struct" style="width:min(92vw,420px)">

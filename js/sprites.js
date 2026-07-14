@@ -257,6 +257,116 @@ function makeStructs() {
       });
     }),
   ];
+  // 수호 장승 (얼굴 새긴 나무 기둥)
+  SPR.jangseung = mkCanvas(40, 76, (ctx) => {
+    ctx.fillStyle = '#6e5230'; ctx.strokeStyle = '#33240e'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(13, 72); ctx.lineTo(14, 16); ctx.quadraticCurveTo(20, 8, 26, 16); ctx.lineTo(27, 72);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // 갓(모자)
+    ctx.fillStyle = '#4a3620';
+    ctx.beginPath(); ctx.ellipse(20, 14, 12, 5, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    // 부릅뜬 눈
+    ctx.fillStyle = '#f2ead8';
+    ctx.beginPath(); ctx.ellipse(16.5, 26, 3.5, 4.5, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(24.5, 26, 3.5, 4.5, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#1a120a';
+    ctx.beginPath(); ctx.arc(16.5, 26, 1.6, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(24.5, 26, 1.6, 0, Math.PI*2); ctx.fill();
+    // 주먹코 & 이빨
+    ctx.fillStyle = '#5c451e';
+    ctx.beginPath(); ctx.ellipse(20.5, 34, 3, 4, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#33240e'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(13, 43); ctx.lineTo(28, 43); ctx.stroke();
+    for (const x of [16, 20, 24]) { ctx.beginPath(); ctx.moveTo(x, 40); ctx.lineTo(x, 46); ctx.stroke(); }
+    // 몸통 문양
+    ctx.beginPath(); ctx.moveTo(15, 54); ctx.lineTo(26, 54); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(17, 60); ctx.lineTo(24, 60); ctx.stroke();
+  });
+  // 빛의 화로 (파편이 타는 돌 화로)
+  SPR.brazier = mkCanvas(48, 56, (ctx) => {
+    ctx.fillStyle = '#6e6e64'; ctx.strokeStyle = '#26241f'; ctx.lineWidth = 2;
+    // 받침
+    ctx.beginPath(); ctx.moveTo(18, 52); ctx.lineTo(30, 52); ctx.lineTo(27, 42); ctx.lineTo(21, 42); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // 그릇
+    ctx.beginPath(); ctx.moveTo(8, 30); ctx.quadraticCurveTo(24, 46, 40, 30);
+    ctx.lineTo(38, 26); ctx.quadraticCurveTo(24, 38, 10, 26); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  });
+  SPR.brazierFlame = [0,1,2].map(f => mkCanvas(32, 34, (ctx) => {
+    const r = srand(300 + f * 7);
+    function fl(w, h, col) {
+      ctx.beginPath(); ctx.moveTo(16, 32);
+      ctx.quadraticCurveTo(16 - w, 22, 16 - w*0.4 + (r()-.5)*3, 32 - h*0.7);
+      ctx.quadraticCurveTo(16 + (r()-.5)*4, 32 - h - f*1.5, 16 + w*0.4, 32 - h*0.7);
+      ctx.quadraticCurveTo(16 + w, 22, 16, 32);
+      ctx.fillStyle = col; ctx.fill();
+    }
+    fl(11, 24, '#8a3cd9'); fl(7, 16, '#c46bff'); fl(3.5, 9, '#f0dcff');
+  }));
+  // 고인돌
+  SPR.dolmen = mkCanvas(84, 72, (ctx) => {
+    const r = srand(410);
+    ctx.fillStyle = '#7c7c70'; ctx.strokeStyle = '#2a2a24'; ctx.lineWidth = 2;
+    // 받침돌 둘
+    ctx.beginPath(); ctx.moveTo(18, 66); ctx.lineTo(20, 36); ctx.lineTo(32, 34); ctx.lineTo(32, 66); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(52, 66); ctx.lineTo(52, 34); ctx.lineTo(64, 36); ctx.lineTo(66, 66); ctx.closePath();
+    ctx.fillStyle = '#72726a'; ctx.fill(); ctx.stroke();
+    // 덮개돌
+    ctx.fillStyle = '#8a8a7e';
+    ctx.beginPath(); ctx.moveTo(6, 36); ctx.lineTo(14, 20); ctx.lineTo(72, 16); ctx.lineTo(78, 30);
+    ctx.lineTo(70, 40); ctx.lineTo(12, 42); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // 이끼 & 문양
+    ctx.fillStyle = 'rgba(90,140,70,.5)';
+    for (let i = 0; i < 6; i++) ctx.fillRect(10 + r()*60, 18 + r()*20, 4 + r()*5, 2.5);
+    ctx.strokeStyle = 'rgba(40,40,34,.8)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(42, 28, 5, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(42, 28, 2, 0, Math.PI*2); ctx.stroke();
+  });
+  // 무너진 석실
+  SPR.chamber = mkCanvas(88, 78, (ctx) => {
+    const r = srand(520);
+    ctx.fillStyle = '#6a6a60'; ctx.strokeStyle = '#26261f'; ctx.lineWidth = 2;
+    // 뒷벽
+    ctx.beginPath(); ctx.moveTo(10, 60); ctx.lineTo(12, 24); ctx.lineTo(44, 14); ctx.lineTo(76, 24); ctx.lineTo(78, 60);
+    ctx.lineTo(60, 70); ctx.lineTo(26, 70); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // 입구(검은 구멍)
+    ctx.fillStyle = '#0c0a08';
+    ctx.beginPath(); ctx.moveTo(34, 68); ctx.lineTo(36, 38); ctx.lineTo(52, 38); ctx.lineTo(54, 68); ctx.closePath();
+    ctx.fill();
+    // 무너진 돌들
+    ctx.fillStyle = '#7c7c70';
+    for (const [x, y, s] of [[16, 62, 7], [68, 58, 8], [58, 66, 5]]) {
+      ctx.beginPath(); ctx.ellipse(x, y, s, s*0.6, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+    // 균열 & 이끼
+    ctx.strokeStyle = 'rgba(20,20,16,.7)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(22, 26); ctx.lineTo(28, 40); ctx.lineTo(24, 52); ctx.stroke();
+    ctx.fillStyle = 'rgba(90,140,70,.45)';
+    for (let i = 0; i < 7; i++) ctx.fillRect(14 + r()*58, 20 + r()*38, 4 + r()*4, 2.5);
+  });
+  // 검은 오벨리스크
+  SPR.obelisk = mkCanvas(56, 110, (ctx) => {
+    ctx.fillStyle = '#16121e'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(20, 104); ctx.lineTo(23, 14); ctx.lineTo(28, 4); ctx.lineTo(33, 14); ctx.lineTo(36, 104);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // 받침
+    ctx.fillStyle = '#241e30';
+    ctx.beginPath(); ctx.moveTo(12, 104); ctx.lineTo(16, 94); ctx.lineTo(40, 94); ctx.lineTo(44, 104); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // 빛나는 문양 (보라)
+    ctx.strokeStyle = '#8a3cd9'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(28, 20); ctx.lineTo(26, 34); ctx.lineTo(30, 44); ctx.lineTo(27, 58); ctx.stroke();
+    ctx.beginPath(); ctx.arc(28, 70, 4, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(28, 78); ctx.lineTo(28, 88); ctx.stroke();
+    ctx.fillStyle = '#b13cff';
+    ctx.beginPath(); ctx.arc(28, 70, 1.6, 0, Math.PI*2); ctx.fill();
+  });
   SPR.bed = mkCanvas(64, 40, (ctx) => {
     const r = srand(88);
     ctx.save(); ctx.translate(32, 24);
@@ -501,6 +611,49 @@ function makeIcons() {
     ctx.beginPath(); ctx.moveTo(8, 36); ctx.lineTo(12, 30); ctx.stroke();
     ctx.strokeStyle = '#4c4c50'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(8, 28); ctx.lineTo(16, 34); ctx.stroke();
+  });
+  I.jangseung = mk((ctx) => {
+    ctx.fillStyle = '#6e5230'; ctx.strokeStyle = '#33240e'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(14, 36); ctx.lineTo(15, 10); ctx.quadraticCurveTo(20, 5, 25, 10); ctx.lineTo(26, 36); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#4a3620';
+    ctx.beginPath(); ctx.ellipse(20, 9, 9, 3.5, 0, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#f2ead8';
+    ctx.beginPath(); ctx.arc(17, 17, 2.5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(23, 17, 2.5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#1a120a';
+    ctx.beginPath(); ctx.arc(17, 17, 1, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(23, 17, 1, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#33240e'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(15, 26); ctx.lineTo(25, 26); ctx.stroke();
+    for (const x of [17, 20, 23]) { ctx.beginPath(); ctx.moveTo(x, 24); ctx.lineTo(x, 28); ctx.stroke(); }
+  });
+  I.brazier = mk((ctx) => {
+    ctx.fillStyle = '#6e6e64'; ctx.strokeStyle = '#26241f'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(15, 36); ctx.lineTo(25, 36); ctx.lineTo(23, 28); ctx.lineTo(17, 28); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(6, 20); ctx.quadraticCurveTo(20, 32, 34, 20);
+    ctx.lineTo(32, 17); ctx.quadraticCurveTo(20, 26, 8, 17); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#8a3cd9';
+    ctx.beginPath(); ctx.moveTo(20, 18); ctx.quadraticCurveTo(13, 10, 20, 2);
+    ctx.quadraticCurveTo(22, 8, 27, 9); ctx.quadraticCurveTo(26, 15, 20, 18); ctx.fill();
+    ctx.fillStyle = '#e8c8ff'; ctx.beginPath(); ctx.arc(21, 10, 2.5, 0, Math.PI*2); ctx.fill();
+  });
+  I.starHeart = mk((ctx) => {
+    const g = ctx.createRadialGradient(20, 20, 2, 20, 20, 14);
+    g.addColorStop(0, '#e8f4ff'); g.addColorStop(0.5, '#59d5e8'); g.addColorStop(1, '#16121e');
+    ctx.fillStyle = g; ctx.strokeStyle = '#0a0812'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4 - Math.PI / 2;
+      const rr = i % 2 === 0 ? 14 : 7;
+      const x = 20 + Math.cos(a) * rr, y = 20 + Math.sin(a) * rr;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.beginPath(); ctx.arc(20, 20, 3, 0, Math.PI*2); ctx.fill();
   });
   I.field = mk((ctx) => {
     ctx.fillStyle = '#6b5537'; ctx.strokeStyle = '#3c2c16'; ctx.lineWidth = 2;

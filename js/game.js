@@ -17,6 +17,10 @@ const G = {
   tiles: null,          // Uint8Array: 0 grass, 1 water, 2 dirt
   objs: new Map(),      // idx -> {type, hp, respawnAt}
   structs: [],          // {type,x,y,life,lit}
+  ruins: [],            // {type,x,y,opened}
+  pages: [],            // 발견한 일기 인덱스 (순서대로)
+  blueprints: [],       // 해금한 설계도
+  newPages: 0,          // 안 읽은 일기 수 (배지)
   mobs: [],
   floats: [],           // {x,y,txt,color,t}
   day: 1, t: 0.28,      // t: 하루 진행도 0~1
@@ -78,6 +82,20 @@ function genWorld() {
       placed++;
     }
   }
+  // 유적 배치 (시드 고정 → 같은 세계엔 같은 자리)
+  G.ruins = [];
+  const rr = seededRand(worldSeed + 777);
+  for (const [type, def] of Object.entries(RUIN_DEFS)) {
+    let placed = 0, guard = 0;
+    while (placed < def.count && guard++ < 400) {
+      const x = 3 + (rr() * (MAP - 6)) | 0, y = 3 + (rr() * (MAP - 6)) | 0;
+      if (G.tiles[idx(x, y)] !== 0 || G.objs.has(idx(x, y))) continue;
+      if (dist(x, y, MAP/2, MAP/2) < (def.tier === 3 ? 12 : 8)) continue;
+      if (G.ruins.some(u => dist(u.x, u.y, x, y) < 6)) continue;
+      G.ruins.push({ type, x, y, opened: false });
+      placed++;
+    }
+  }
 }
 
 function isBlocked(x, y) {
@@ -86,6 +104,7 @@ function isBlocked(x, y) {
   const o = G.objs.get(idx(x, y));
   if (o && !o.dead && WORLD_OBJS[o.type].solid) return true;
   if (G.structs.some(s => s.x === x && s.y === y)) return true;
+  if (G.ruins.some(u => u.x === x && u.y === y)) return true;
   return false;
 }
 
@@ -204,7 +223,17 @@ function bumpCounter(type, key, n = 1) {
 }
 function questLineDone(line) {
   if (line.type === 'day') return G.day >= line.n;
+  if (line.type === 'pages') return G.pages.length >= line.n;
+  if (line.type === 'ruinTier')
+    return G.ruins.filter(u => RUIN_DEFS[u.type].tier === +line.key && u.opened).length >= line.n;
   return (G.counters[G.questIdx + ':' + line.t] || 0) >= line.n;
+}
+function questLineCur(line) {
+  if (line.type === 'day') return Math.min(G.day, line.n);
+  if (line.type === 'pages') return Math.min(G.pages.length, line.n);
+  if (line.type === 'ruinTier')
+    return Math.min(G.ruins.filter(u => RUIN_DEFS[u.type].tier === +line.key && u.opened).length, line.n);
+  return G.counters[G.questIdx + ':' + line.t] || 0;
 }
 function checkQuest() {
   const q = QUESTS[G.questIdx];
@@ -223,7 +252,7 @@ function renderMissions() {
   if (!q) { title.textContent = '모든 미션 완료!'; lines.innerHTML = '<div class="done">야생에서 계속 살아남으세요…</div>'; return; }
   title.textContent = q.title;
   lines.innerHTML = q.lines.map(l => {
-    const cur = l.type === 'day' ? Math.min(G.day, l.n) : (G.counters[G.questIdx + ':' + l.t] || 0);
+    const cur = questLineCur(l);
     const done = questLineDone(l);
     return `<div class="${done ? 'done' : ''}">${l.t} (${cur}/${l.n})</div>`;
   }).join('');
@@ -272,6 +301,9 @@ function tapWorld(wx, wy) {
   // 1) 몬스터?
   const mob = G.mobs.find(m => dist(m.x, m.y, wx, wy) < 0.8);
   if (mob) { setTargetMob(mob); return; }
+  // 1.5) 유적?
+  const ru = G.ruins.find(u => u.x === tx && u.y === ty);
+  if (ru) { setTarget({ kind: 'ruin', ru, x: tx, y: ty }); return; }
   // 2) 구조물?
   const st = G.structs.find(s => s.x === tx && s.y === ty);
   if (st) { setTarget({ kind: 'struct', st, x: tx, y: ty }); return; }
@@ -330,6 +362,7 @@ function doGather(dt) {
         spawnFloat(t.x, t.y - 0.6, `+${y.q} ${ITEMS[y.id].n}`, '#fff');
       }
       gainExp(def.tool ? 6 : 3);
+      maybeFindPage(0.03);
       if (def.respawn) { o.dead = true; o.respawnAt = nowGameTime() + def.respawn; }
       else G.objs.delete(idx(t.x, t.y));
       P.target = null;
@@ -364,6 +397,7 @@ function doFish(dt) {
       addItemStack('fish', 1);
       spawnFloat(P.x, P.y - 1, '+1 생선', '#6aa8c4');
       gainExp(6);
+      maybeFindPage(0.05);
       sfx('pick');
     } else {
       spawnFloat(P.x, P.y - 1, '놓쳤다…', '#8f8b7c');
@@ -449,6 +483,85 @@ function useField(st) {
   }
 }
 
+/* ---------- 유적 & 일기 ---------- */
+function doInvestigate(dt) {
+  const ru = P.target.ru;
+  if (ru.opened) { toast('이미 조사를 마친 유적입니다.', '#8f8b7c'); P.target = null; return; }
+  const def = RUIN_DEFS[ru.type];
+  // 조건 검사 (조사 시작 시 1회)
+  if (P.actProg === 0) {
+    if (def.tier === 2 && hasTool('pick') < 0) {
+      toast('무너진 입구를 파내려면 곡괭이가 필요합니다.', '#ff9d2e'); P.target = null; return;
+    }
+    if (def.tier === 3) {
+      if (!isNight()) { toast('오벨리스크의 문양은 낮에는 침묵합니다. 밤에 다시 오세요.', '#b13cff'); P.target = null; return; }
+      if (invCount('shard') < 3) { toast('문양이 요구합니다… 어둠의 파편 3개를 바치세요.', '#b13cff'); P.target = null; return; }
+    }
+  }
+  P.actProg += dt;
+  if (P.actProg >= 2.5) {
+    P.actProg = 0;
+    openRuin(ru);
+    P.target = null;
+  } else if ((P.actProg * 10 | 0) % 8 === 0) {
+    P.swing = 0.6;
+  }
+}
+
+function openRuin(ru) {
+  const def = RUIN_DEFS[ru.type];
+  ru.opened = true;
+  sfx('quest');
+  if (ru.type === 'dolmen') {
+    findPage();
+    addItemStack('flint', 2); addItemStack('stone', 1);
+    spawnFloat(ru.x, ru.y - 1.2, '+부싯돌, 돌멩이', '#fff');
+    if (!G.blueprints.includes('jangseung')) {
+      G.blueprints.push('jangseung');
+      toast('📜 설계도 습득: 수호 장승 — 밤의 것들이 그 시선을 피합니다.', '#ffd94d');
+    }
+    gainExp(25);
+  } else if (ru.type === 'chamber') {
+    findPage();
+    addItemStack('iron', 1); addItemStack('shard', 1);
+    spawnFloat(ru.x, ru.y - 1.2, '+철괴, 어둠의 파편', '#b13cff');
+    if (!G.blueprints.includes('brazier')) {
+      G.blueprints.push('brazier');
+      toast('📜 설계도 습득: 빛의 화로 — 꺼지지 않는 불을 피웁니다.', '#ffd94d');
+    }
+    gainExp(45);
+  } else if (ru.type === 'obelisk') {
+    removeItems('shard', 3);
+    toast('파편이 오벨리스크 속으로 스며듭니다…', '#b13cff');
+    findPage(); findPage();
+    addItemStack('starHeart', 1);
+    toast('💠 별의 심장을 손에 넣었습니다. 어둠 속에서도 앞이 보입니다.', '#59d5e8');
+    gainExp(90);
+  }
+  toast(`${def.n} 조사 완료`, '#8f8');
+  checkQuest(); renderMissions();
+  updateInvPanel(); updateCraftPanel(); updateHud();
+  save();
+}
+
+function findPage() {
+  if (G.pages.length >= LORE_PAGES.length) return false;
+  const i = G.pages.length;
+  G.pages.push(i);
+  G.newPages++;
+  toast(`📖 일기 발견: 「${LORE_PAGES[i].t}」`, '#e8d8a8');
+  sfx('quest');
+  if (G.pages.length === LORE_PAGES.length) {
+    toast('모든 기록을 모았습니다. 먼저 온 자의 이야기가 완성되었습니다.', '#ffd94d');
+  }
+  checkQuest(); renderMissions();
+  updateJournalBadge();
+  return true;
+}
+function maybeFindPage(chance) {
+  if (Math.random() < chance) findPage();
+}
+
 function trySleep(st) {
   if (G.mobs.some(m => dist(m.x, m.y, P.x, P.y) < 7)) { toast('근처에 적이 있어 잘 수 없습니다!', '#ff5252'); return; }
   G.sleeping = true;
@@ -505,6 +618,7 @@ function useWaterskin(i) {
 /* ---------- 제작 ---------- */
 function canCraft(r) {
   if (P.level < (r.lv || 1)) return false;
+  if (r.bp && !G.blueprints.includes(r.bp)) return false;
   if (r.fire && !nearFire()) return false;
   if (r.smelt && !nearFurnace()) return false;
   return Object.entries(r.mats).every(([id, n]) => invCount(id) >= n);
@@ -517,6 +631,7 @@ function nearFurnace() {
 }
 function craft(r) {
   if (P.level < (r.lv || 1)) { toast(r.lock || '레벨이 부족합니다.'); return; }
+  if (r.bp && !G.blueprints.includes(r.bp)) { toast('설계도가 필요합니다. 유적을 조사하세요.', '#c9a2ff'); return; }
   if (r.fire && !nearFire()) { toast('불(모닥불/화덕) 근처에서만 요리할 수 있습니다.', '#ff9d2e'); return; }
   if (r.smelt && !nearFurnace()) { toast('화덕 근처에서만 제련할 수 있습니다.', '#ff9d2e'); return; }
   if (!Object.entries(r.mats).every(([id, n]) => invCount(id) >= n)) { toast('재료가 부족합니다.', '#ff5252'); return; }
@@ -655,10 +770,11 @@ function updateMobs(dt) {
         continue;
       }
     } else if (def.kind === 'night') {
-      // 정령/늑대: 어그로 범위 내 추격 (늑대는 불빛 무시)
+      // 정령/늑대: 어그로 범위 내 추격 (늑대는 불빛 무시, 장승의 시선은 모두가 피함)
       const litSafe = !def.braveFire &&
-        G.structs.some(s => STRUCTS[s.type].warm && s.life > 0 && dist(s.x, s.y, m.x, m.y) < 3.2);
-      if (d < def.aggro && !litSafe) {
+        G.structs.some(s => STRUCTS[s.type].warm && (!STRUCTS[s.type].life || s.life > 0) && dist(s.x, s.y, m.x, m.y) < 3.2);
+      const warded = G.structs.some(s => STRUCTS[s.type].ward && dist(s.x, s.y, m.x, m.y) < STRUCTS[s.type].ward);
+      if (d < def.aggro && !litSafe && !warded) {
         if (d > 1.1) { moveCreature(m, P.x, P.y, def.speed, dt); continue; }
         if (m.atkCd <= 0) {
           m.atkCd = 1.5;
@@ -687,6 +803,7 @@ function updateMobs(dt) {
         }
         gainExp(def.exp);
         bumpCounter('kill', m.type);
+        maybeFindPage(0.06);
       }
       G.mobs.splice(i, 1);
       if (P.target && P.target.mob === m) P.target = null;
@@ -754,7 +871,7 @@ function updateSurvival(dt) {
   // 체온
   let ambient = isNight() ? 4 : 22;
   if (G.rain) ambient -= 7;
-  const warm = G.structs.some(s => STRUCTS[s.type].warm && s.life > 0 && dist(s.x, s.y, P.x, P.y) < 3) ? 26 : 0;
+  const warm = G.structs.some(s => STRUCTS[s.type].warm && (!STRUCTS[s.type].life || s.life > 0) && dist(s.x, s.y, P.x, P.y) < 3) ? 26 : 0;
   const armorWarm = P.equipArmor >= 0 ? (ITEMS[P.inv[P.equipArmor].id].warm || 0) : 0;
   const target = Math.max(ambient, warm) + (P.equipLight >= 0 ? 4 : 0) + armorWarm;
   P.temp += (target - P.temp) * dt * 0.05;
@@ -843,6 +960,10 @@ function updatePlayer(dt) {
       if (!nearTarget(t)) P.target = null;
       else { useStruct(t.st); P.target = null; }
     }
+    else if (t.kind === 'ruin') {
+      if (!nearTarget(t, 1.9)) P.target = null;
+      else doInvestigate(dt);
+    }
   }
   // 오브젝트 리스폰
   const now = nowGameTime();
@@ -910,6 +1031,7 @@ function render() {
     draws.push({ depth: x + y, fn: () => drawObj(o, x, y, ox, oy) });
   }
   for (const s of G.structs) draws.push({ depth: s.x + s.y, fn: () => drawStruct(s, ox, oy) });
+  for (const u of G.ruins) draws.push({ depth: u.x + u.y, fn: () => drawRuin(u, ox, oy) });
   for (const m of G.mobs) draws.push({ depth: m.x + m.y + 0.01, fn: () => drawCreature(m, ox, oy) });
   draws.push({ depth: P.x + P.y + 0.02, fn: () => drawPlayer(ctx, worldSX(P.x, P.y) + ox, worldSY(P.x, P.y) + oy, P.path.length ? animT : 0, P.face < 0, P.swing) });
   draws.sort((a, b) => a.depth - b.depth);
@@ -964,6 +1086,11 @@ function drawStruct(s, ox, oy) {
     }
   } else if (s.type === 'bed') {
     ctx.drawImage(SPR.bed, sx - 32, sy - 24);
+  } else if (s.type === 'jangseung') {
+    ctx.drawImage(SPR.jangseung, sx - 20, sy - 70);
+  } else if (s.type === 'brazier') {
+    ctx.drawImage(SPR.brazier, sx - 24, sy - 46);
+    ctx.drawImage(SPR.brazierFlame[(animT * 7 | 0) % 3], sx - 16, sy - 62);
   } else if (s.type === 'field') {
     ctx.drawImage(SPR.field, sx - 32, sy - 20);
     if (s.planted) {
@@ -975,6 +1102,27 @@ function drawStruct(s, ox, oy) {
         ctx.drawImage(SPR.sprout[0], sx + 2, sy - 12);
       }
     }
+  }
+}
+
+function drawRuin(u, ox, oy) {
+  const sx = worldSX(u.x, u.y) + ox, sy = worldSY(u.x, u.y) + oy;
+  if (u.type === 'dolmen') ctx.drawImage(SPR.dolmen, sx - 42, sy - 60);
+  else if (u.type === 'chamber') ctx.drawImage(SPR.chamber, sx - 44, sy - 66);
+  else if (u.type === 'obelisk') {
+    ctx.drawImage(SPR.obelisk, sx - 28, sy - 100);
+    if (!u.opened) { // 문양 맥동
+      ctx.fillStyle = `rgba(177,60,255,${0.25 + Math.sin(animT * 2.5) * 0.2})`;
+      ctx.beginPath(); ctx.arc(sx, sy - 34, 6, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // 미조사 유적 반짝임
+  if (!u.opened && u.type !== 'obelisk') {
+    ctx.globalAlpha = 0.5 + Math.sin(animT * 3 + u.x) * 0.4;
+    ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe066';
+    ctx.fillText('✦', sx, sy - (u.type === 'dolmen' ? 66 : 72));
+    ctx.globalAlpha = 1;
   }
 }
 
@@ -1026,12 +1174,19 @@ function drawDarkness(ox, oy) {
   dctx.globalCompositeOperation = 'destination-out';
   const lights = [];
   // 플레이어 기본 시야
-  lights.push({ x: P.x, y: P.y, r: alpha > 0.5 ? 2.2 : 8, warm: false });
+  const nightBase = invCount('starHeart') > 0 ? 3.6 : 2.2; // 별의 심장: 밤 시야 확장
+  lights.push({ x: P.x, y: P.y, r: alpha > 0.5 ? nightBase : 8, warm: false });
   if (P.equipLight >= 0 && P.inv[P.equipLight])
     lights.push({ x: P.x, y: P.y, r: ITEMS[P.inv[P.equipLight].id].light || 4.6, warm: true });
   for (const s of G.structs) {
     const def = STRUCTS[s.type];
-    if (def.light && s.lit && s.life > 0) lights.push({ x: s.x, y: s.y, r: def.light, warm: true });
+    if (def.light && s.lit && (!def.life || s.life > 0)) lights.push({ x: s.x, y: s.y, r: def.light, warm: true });
+  }
+  // 미개봉 오벨리스크는 밤에 스스로 희미하게 빛난다 (멀리서 보이는 등대)
+  if (alpha > 0.4) {
+    for (const u of G.ruins) {
+      if (u.type === 'obelisk' && !u.opened) lights.push({ x: u.x, y: u.y, r: 2.2, purple: true });
+    }
   }
   for (const l of lights) {
     const sx = worldSX(l.x, l.y) + ox, sy = worldSY(l.x, l.y) + oy - 10;
@@ -1045,14 +1200,19 @@ function drawDarkness(ox, oy) {
   dctx.globalCompositeOperation = 'source-over';
   ctx.drawImage(darkCanvas, 0, 0);
 
-  // 따뜻한 불빛 색감
+  // 따뜻한 불빛 / 보랏빛 색감
   for (const l of lights) {
-    if (!l.warm) continue;
+    if (!l.warm && !l.purple) continue;
     const sx = worldSX(l.x, l.y) + ox, sy = worldSY(l.x, l.y) + oy - 10;
     const pr = l.r * TW * 0.5;
     const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, pr);
-    g.addColorStop(0, 'rgba(255,160,60,0.18)');
-    g.addColorStop(1, 'rgba(255,160,60,0)');
+    if (l.purple) {
+      g.addColorStop(0, 'rgba(177,60,255,0.22)');
+      g.addColorStop(1, 'rgba(177,60,255,0)');
+    } else {
+      g.addColorStop(0, 'rgba(255,160,60,0.18)');
+      g.addColorStop(1, 'rgba(255,160,60,0)');
+    }
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(sx, sy, pr, 0, Math.PI * 2); ctx.fill();
   }
@@ -1077,6 +1237,19 @@ function drawLabels(ox, oy) {
       ctx.fillText(label, sx, sy - (o.type === 'tree' ? 88 : 34));
     }
   }
+  // 유적 라벨 (랜드마크라 더 멀리서 보임)
+  for (const u of G.ruins) {
+    if (dist(u.x, u.y, P.x, P.y) > 6) continue;
+    const sx = worldSX(u.x, u.y) + ox, sy = worldSY(u.x, u.y) + oy;
+    const def = RUIN_DEFS[u.type];
+    let hint = u.opened ? ' (조사 완료)'
+      : def.tier === 2 ? ' ⛏'
+      : def.tier === 3 ? (isNight() ? ' (봉헌: 파편 3)' : ' (밤에만)')
+      : ' (조사)';
+    const yOff = u.type === 'obelisk' ? 108 : 74;
+    ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillText(def.n + hint, sx + 1, sy - yOff + 1);
+    ctx.fillStyle = u.opened ? '#8f8b7c' : '#c9a2ff'; ctx.fillText(def.n + hint, sx, sy - yOff);
+  }
   // 구조물 라벨
   for (const s of G.structs) {
     if (dist(s.x, s.y, P.x, P.y) > 4) continue;
@@ -1098,7 +1271,7 @@ function updateHud() {
   $('lv-label').textContent = 'LV ' + P.level;
   $('day-label').textContent = G.day + ' DAYS';
   $('temp-val').textContent = Math.round(P.temp);
-  $('shard-count').textContent = G.shards;
+  $('shard-count').textContent = invCount('shard');
   setGauge('g-hp', P.hp / P.maxHp);
   setGauge('g-ep', P.ep / 100);
   setGauge('g-hunger', P.hunger / 100);
@@ -1218,20 +1391,23 @@ function updateCraftPanel() {
   const list = $('craft-list');
   list.innerHTML = '';
   for (const r of RECIPES.filter(r => r.cat === craftCat)) {
+    const lockedBp = r.bp && !G.blueprints.includes(r.bp);
     const lockedLv = P.level < (r.lv || 1);
     const lockedFire = r.fire && !nearFire();
     const lockedSmelt = r.smelt && !nearFurnace();
     const card = document.createElement('div');
-    card.className = 'craft-card' + ((lockedLv || lockedFire || lockedSmelt) ? ' locked' : '');
+    card.className = 'craft-card' + ((lockedBp || lockedLv || lockedFire || lockedSmelt) ? ' locked' : '');
     const name = r.place ? STRUCTS[r.out].n : ITEMS[r.out].n;
     const iconWrap = document.createElement('div'); iconWrap.className = 'cc-icon';
     const cv = document.createElement('canvas'); cv.width = 40; cv.height = 40;
     cv.style.transform = 'scale(1.7)';
     cv.getContext('2d').drawImage(SPR.icons[r.out], 0, 0);
     iconWrap.appendChild(cv);
-    if (lockedLv || lockedFire || lockedSmelt) {
+    if (lockedBp || lockedLv || lockedFire || lockedSmelt) {
       const lock = document.createElement('div'); lock.className = 'cc-lock';
-      lock.textContent = lockedLv ? (r.lock || `레벨 ${r.lv} 필요`) : lockedSmelt ? '화덕 근처 필요' : '불 근처 필요';
+      lock.textContent = lockedBp ? '설계도 필요 (유적 조사)'
+        : lockedLv ? (r.lock || `레벨 ${r.lv} 필요`)
+        : lockedSmelt ? '화덕 근처 필요' : '불 근처 필요';
       iconWrap.appendChild(lock);
     }
     // 재료
@@ -1276,14 +1452,41 @@ function updateCharPanel() {
   $('char-exp-label').textContent = `EXP ${P.exp} / ${need}`;
 }
 
+/* ---------- 패널: 일기 도감 ---------- */
+let selPage = -1;
+function updateJournalBadge() {
+  const b = $('journal-badge');
+  if (G.newPages > 0) { b.textContent = G.newPages; b.classList.remove('hidden'); }
+  else b.classList.add('hidden');
+}
+function updateJournalPanel() {
+  const grid = $('journal-grid');
+  grid.innerHTML = '';
+  LORE_PAGES.forEach((p, i) => {
+    const found = G.pages.includes(i);
+    const el = document.createElement('div');
+    el.className = 'jpage' + (found ? ' found' : '') + (i === selPage ? ' sel' : '');
+    el.innerHTML = `<div class="jp-num">${i + 1}장</div><div>${found ? p.t : '???'}</div>`;
+    if (found) el.onclick = () => { selPage = i; updateJournalPanel(); };
+    grid.appendChild(el);
+  });
+  const read = $('journal-read');
+  if (selPage >= 0 && G.pages.includes(selPage)) {
+    read.classList.remove('hidden');
+    $('journal-read-title').textContent = `${selPage + 1}장 — ${LORE_PAGES[selPage].t}`;
+    $('journal-read-body').textContent = LORE_PAGES[selPage].b;
+  } else read.classList.add('hidden');
+}
+
 /* ---------- 패널 공통 ---------- */
-const PANELS = ['panel-inv', 'panel-craft', 'panel-char', 'panel-settings', 'panel-help', 'panel-struct'];
+const PANELS = ['panel-inv', 'panel-craft', 'panel-char', 'panel-settings', 'panel-help', 'panel-struct', 'panel-journal'];
 function openPanel(id) {
   PANELS.forEach(p => $(p).classList.add('hidden'));
   $(id).classList.remove('hidden');
   if (id === 'panel-inv') updateInvPanel();
   if (id === 'panel-craft') updateCraftPanel();
   if (id === 'panel-char') updateCharPanel();
+  if (id === 'panel-journal') { G.newPages = 0; updateJournalBadge(); updateJournalPanel(); }
 }
 function togglePanel(id) {
   const isOpen = !$(id).classList.contains('hidden');
@@ -1300,6 +1503,7 @@ function save() {
       seed: worldSeed, day: G.day, t: G.t, shards: G.shards, questIdx: G.questIdx,
       counters: G.counters, structs: G.structs, sound: G.sound, objs: objsArr,
       rain: G.rain, rainT: G.rainT,
+      ruins: G.ruins, pages: G.pages, blueprints: G.blueprints, newPages: G.newPages,
       p: { x: P.x, y: P.y, level: P.level, exp: P.exp, hp: P.hp, maxHp: P.maxHp,
            ep: P.ep, hunger: P.hunger, thirst: P.thirst, fatigue: P.fatigue, temp: P.temp,
            inv: P.inv, equipTool: P.equipTool, equipLight: P.equipLight, equipArmor: P.equipArmor,
@@ -1320,6 +1524,12 @@ function load() {
     G.day = d.day; G.t = d.t; G.shards = d.shards; G.questIdx = d.questIdx;
     G.counters = d.counters || {}; G.structs = d.structs || []; G.sound = d.sound !== false;
     G.rain = !!d.rain; G.rainT = d.rainT || 0;
+    // 유적: 구버전 저장엔 없음 → genWorld가 만든 것을 유지하되 구조물과 겹치면 제거
+    if (d.ruins) G.ruins = d.ruins;
+    G.ruins = G.ruins.filter(u => !G.structs.some(s => s.x === u.x && s.y === u.y));
+    G.pages = d.pages || [];
+    G.blueprints = d.blueprints || [];
+    G.newPages = d.newPages || 0;
     Object.assign(P, d.p);
     if (P.equipArmor === undefined) P.equipArmor = -1; // 구버전 저장 호환
     return true;
@@ -1343,6 +1553,7 @@ function bindInput() {
   $('btn-bag').onclick = () => togglePanel('panel-inv');
   $('btn-craft').onclick = () => togglePanel('panel-craft');
   $('btn-char').onclick = () => togglePanel('panel-char');
+  $('btn-journal').onclick = () => togglePanel('panel-journal');
   $('btn-settings').onclick = () => togglePanel('panel-settings');
   $('btn-attack').onclick = () => { if (!G.gameOver) attackNearest(); };
   $('btn-wait').onclick = () => { P.path = []; P.target = null; toast('잠시 숨을 고릅니다…'); };
@@ -1411,6 +1622,7 @@ function start() {
   renderMissions();
   updateHud();
   updateQuickslots();
+  updateJournalBadge();
   requestAnimationFrame((ts) => { lastT = ts; requestAnimationFrame(loop); });
 }
 start();
