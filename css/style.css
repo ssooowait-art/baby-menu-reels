@@ -58,6 +58,8 @@ canvas { image-rendering:pixelated; }
 .gauge.low { animation:blink 1s infinite; }
 @keyframes blink { 50% { border-color:#ff3838; } }
 
+#buff-label { margin-top:8px; display:inline-block; background:rgba(138,60,217,.28); border:1px solid #8a3cd9;
+  border-radius:12px; padding:3px 14px; font-size:13px; color:#e0c8ff; text-shadow:0 1px 2px #000; }
 #toast-area { margin-top:14px; display:flex; flex-direction:column; align-items:center; gap:6px; }
 .toast { background:rgba(0,0,0,.45); padding:6px 18px; border-radius:8px; font-size:19px; font-weight:bold;
   text-shadow:0 2px 4px #000; animation:toast-in .25s; white-space:nowrap; }
