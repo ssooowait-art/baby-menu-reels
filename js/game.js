@@ -70,20 +70,17 @@ function genWorld() {
   for (let y = MAP/2 - 3; y < MAP/2 + 3; y++) for (let x = MAP/2 - 3; x < MAP/2 + 3; x++)
     G.tiles[idx(x|0, y|0)] = 0;
 
-  // 오브젝트 뿌리기
-  const density = [
-    ['tree', 90], ['bush', 55], ['rock', 26], ['twig', 34], ['flint', 22],
-    ['pebble', 20], ['berry', 16], ['bean', 14], ['nest', 10],
-  ];
-  for (const [type, n] of density) {
-    let placed = 0, guard = 0;
-    while (placed < n && guard++ < n * 30) {
-      const x = (r() * MAP) | 0, y = (r() * MAP) | 0;
-      if (G.tiles[idx(x, y)] !== 0 || G.objs.has(idx(x, y))) continue;
-      if (dist(x, y, MAP/2, MAP/2) < 2.5) continue;
-      G.objs.set(idx(x, y), { type, hp: WORLD_OBJS[type].hits, respawnAt: 0 });
-      placed++;
-    }
+  // 바이옴: 북쪽(x+y 작음) 설원 3, 남쪽(x+y 큼) 늪지 4
+  for (let y = 0; y < MAP; y++) for (let x = 0; x < MAP; x++) {
+    if (G.tiles[idx(x, y)] === 1) continue; // 물은 유지
+    const s = x + y + Math.sin(x * 1.3) * 2 + Math.cos(y * 1.7) * 2; // 자연스러운 경계
+    if (s < 26) G.tiles[idx(x, y)] = 3;
+    else if (s > 62) G.tiles[idx(x, y)] = 4;
+  }
+
+  // 오브젝트 뿌리기 (바이옴별 허용 타일)
+  for (const [type, n] of OBJ_DENSITY) {
+    seedObjects(type, n, r);
   }
   // 유적 배치 (시드 고정 → 같은 세계엔 같은 자리)
   G.ruins = [];
@@ -100,6 +97,24 @@ function genWorld() {
     }
   }
 }
+
+// 오브젝트 배치 (월드 생성 + 구버전 저장 마이그레이션 공용)
+function seedObjects(type, n, rng) {
+  const rand = rng || Math.random;
+  const allowed = WORLD_OBJS[type].tiles || [0];
+  let placed = 0, guard = 0;
+  while (placed < n && guard++ < n * 40) {
+    const x = (rand() * MAP) | 0, y = (rand() * MAP) | 0;
+    if (!allowed.includes(G.tiles[idx(x, y)]) || G.objs.has(idx(x, y))) continue;
+    if (dist(x, y, MAP/2, MAP/2) < 2.5) continue;
+    if (G.ruins.some(u => u.x === x && u.y === y)) continue;
+    if (G.structs.some(s => s.x === x && s.y === y)) continue;
+    G.objs.set(idx(x, y), { type, hp: WORLD_OBJS[type].hits, respawnAt: 0 });
+    placed++;
+  }
+}
+
+function biomeAt(x, y) { return inMap(x | 0, y | 0) ? G.tiles[idx(x | 0, y | 0)] : 0; }
 
 function isBlocked(x, y) {
   if (!inMap(x, y)) return true;
@@ -864,11 +879,18 @@ function updateMobs(dt) {
     // 낮이 되면 밤 몬스터 소멸
     for (const m of G.mobs) if (MOBS[m.type].kind === 'night') m.hp -= dt * 12;
   }
-  // 낮 동물 스폰
+  // 낮 동물 스폰 (플레이어 주변 바이옴에 맞는 동물)
   animalTimer -= dt;
   if (animalTimer <= 0) {
     animalTimer = 18 + Math.random() * 12;
-    if (!isNight() && animalCount < 4) spawnCreature(Math.random() < 0.65 ? 'rabbit' : 'boar', 7, 13);
+    if (!isNight() && animalCount < 4) {
+      const b = biomeAt(P.x, P.y);
+      let type;
+      if (b === 3) type = Math.random() < 0.4 ? 'bear' : 'rabbit';        // 설원
+      else if (b === 4) type = Math.random() < 0.55 ? 'snake' : 'rabbit'; // 늪지
+      else type = Math.random() < 0.65 ? 'rabbit' : 'boar';               // 초원
+      spawnCreature(type, 7, 13);
+    }
   }
   // 방랑 상인: 2일차부터 하루 한 번 낮에 출현 시도
   const traderHere = G.mobs.some(m => m.type === 'trader');
@@ -901,7 +923,9 @@ function updateMobs(dt) {
         continue;
       }
     } else if (def.retaliate) {
-      // 멧돼지: 맞으면 분노해서 반격
+      // 독사: 영역에 들어오면 먼저 문다
+      if (def.territorial && !m.angry && d < 1.8) m.angry = true;
+      // 맞으면(또는 영역 침범 시) 분노해서 반격
       if (m.angry && d < 10) {
         if (d > 1.1) { moveCreature(m, P.x, P.y, def.speed, dt); continue; }
         if (m.atkCd <= 0) {
@@ -1013,8 +1037,11 @@ function updateSurvival(dt) {
   P.hunger = clamp(P.hunger - 34 * perDay, 0, 100);
   P.thirst = clamp(P.thirst - 46 * perDay, 0, 100);
   P.fatigue = clamp(P.fatigue + 40 * perDay, 0, 100);
-  // 체온
+  // 체온 (설원은 훨씬 춥고, 늪지는 눅눅하게 서늘함)
   let ambient = isNight() ? 4 : 22;
+  const biome = biomeAt(P.x, P.y);
+  if (biome === 3) ambient -= 10;
+  else if (biome === 4) ambient -= 3;
   if (G.rain) ambient -= 7;
   const warm = G.structs.some(s => STRUCTS[s.type].warm && (!STRUCTS[s.type].life || s.life > 0) && dist(s.x, s.y, P.x, P.y) < 3) ? 26 : 0;
   const armorWarm = P.equipArmor >= 0 ? (ITEMS[P.inv[P.equipArmor].id].warm || 0) : 0;
@@ -1072,7 +1099,8 @@ function updatePlayer(dt) {
   if (P.path.length) {
     const n = P.path[0];
     const d = dist(P.x, P.y, n.x, n.y);
-    const speed = 3.4 * (P.fatigue >= 100 ? 0.75 : 1) * (P.ep <= 0 ? 0.7 : 1) * (hasBuff('speed') ? 1.25 : 1);
+    const speed = 3.4 * (P.fatigue >= 100 ? 0.75 : 1) * (P.ep <= 0 ? 0.7 : 1)
+      * (hasBuff('speed') ? 1.25 : 1) * (biomeAt(P.x, P.y) === 4 ? 0.85 : 1); // 늪은 발이 빠진다
     if (d < 0.08) { P.x = n.x; P.y = n.y; P.path.shift(); }
     else {
       P.face = n.x + n.y > P.x + P.y ? 1 : (Math.abs((n.x - P.x) - (n.y - P.y)) < 0.01 ? P.face : ((n.x - n.y) > (P.x - P.y) ? 1 : -1));
@@ -1172,7 +1200,11 @@ function render() {
       const sx = worldSX(x, y) + ox, sy = worldSY(x, y) + oy;
       if (sx < -TW || sx > VW + TW || sy < -TH * 2 || sy > VH + TH * 2) continue;
       const t = G.tiles[idx(x, y)];
-      const spr = t === 1 ? SPR.water[waterFrame] : t === 2 ? SPR.dirt[0] : SPR.grass[(x * 7 + y * 13) % 4];
+      const spr = t === 1 ? SPR.water[waterFrame]
+        : t === 2 ? SPR.dirt[0]
+        : t === 3 ? SPR.snow[(x * 7 + y * 13) % 2]
+        : t === 4 ? SPR.swamp[(x * 7 + y * 13) % 2]
+        : SPR.grass[(x * 7 + y * 13) % 4];
       ctx.drawImage(spr, sx - TW / 2, sy - TH / 2);
     }
   }
@@ -1273,8 +1305,11 @@ function drawObj(o, x, y, ox, oy) {
     tree: [SPR.tree, 36, 90], bush: [SPR.bush, 28, 40], rock: [SPR.rock, 32, 44],
     twig: [SPR.twig, 20, 20], flint: [SPR.flint, 18, 18], pebble: [SPR.pebble, 18, 18],
     berry: [SPR.berry, 24, 34], bean: [SPR.bean, 22, 36], nest: [SPR.nest, 24, 26],
+    mushroom: [SPR.mushroom, 22, 26], herb: [SPR.herb, 20, 24],
+    snowBerry: [SPR.snowBerry, 24, 30], goldRock: [SPR.goldRock, 32, 44],
   };
-  const [spr, ax, ay] = map[o.type];
+  let [spr, ax, ay] = map[o.type];
+  if (o.type === 'tree' && G.tiles[idx(x, y)] === 3) spr = SPR.treeSnow; // 눈 덮인 나무
   // 채집 중 흔들림
   let shake = 0;
   if (P.target && P.target.o === o && P.actProg > 0.4) shake = Math.sin(animT * 40) * 2;
@@ -1371,6 +1406,8 @@ function drawCreature(m, ox, oy) {
   const r = m.hp / m.maxHp;
   const flip = m.face < 0;
   if (m.type === 'trader') drawTrader(ctx, sx, sy, m.t, flip);
+  else if (m.type === 'snake') drawCreaturePix(ctx, 'snake', sx, sy, m.t, r, flip);
+  else if (m.type === 'bear') drawCreaturePix(ctx, 'bear', sx, sy, m.t, r, flip, { angry: m.angry });
   else if (m.type === 'rabbit') drawRabbit(ctx, sx, sy, m.t, r, flip);
   else if (m.type === 'boar') drawBoar(ctx, sx, sy, m.t, r, flip, m.angry);
   else if (m.type === 'wolf') drawWolf(ctx, sx, sy, m.t, r, flip);
@@ -1609,6 +1646,14 @@ function updateInvPanel() {
     $('inv-info-desc').textContent = def.desc || '';
     const btns = $('inv-info-btns'); btns.innerHTML = '';
     if (def.food) addBtn(btns, '먹기', () => { eatItem(selSlot); });
+    if (def.heal) addBtn(btns, `사용 (HP +${def.heal})`, () => {
+      P.hp = clamp(P.hp + def.heal, 0, P.maxHp);
+      s.qty--; if (s.qty <= 0) removeSlot(selSlot);
+      selSlot = -1;
+      spawnFloat(P.x, P.y - 1, `+${def.heal} HP`, '#8f8');
+      sfx('eat');
+      updateInvPanel(); updateHud();
+    });
     if (s.id === 'waterskin') addBtn(btns, `마시기 (${Math.floor(s.dur)}/${def.dur})`, () => { useWaterskin(selSlot); });
     if (def.equip) addBtn(btns, (selSlot === P.equipTool || selSlot === P.equipLight || selSlot === P.equipArmor) ? '해제' : '장착', () => { equipItem(selSlot); });
     addBtn(btns, '버리기', () => { removeSlot(selSlot); selSlot = -1; updateInvPanel(); updateQuickslots(); });
@@ -1787,6 +1832,12 @@ function load() {
     }
     G.ruins = G.ruins.filter(u => !G.structs.some(s => s.x === u.x && s.y === u.y));
     G.traderDay = d.traderDay || 0;
+    // 구버전 저장 마이그레이션: 바이옴 신규 자원이 없으면 뿌려준다
+    for (const [type, n] of OBJ_DENSITY) {
+      let has = false;
+      for (const [, o] of G.objs) if (o.type === type) { has = true; break; }
+      if (!has) seedObjects(type, n);
+    }
     G.pages = d.pages || [];
     G.blueprints = d.blueprints || [];
     G.newPages = d.newPages || 0;

@@ -75,6 +75,16 @@ function makeTiles() {
     ditherTile(['#4fb3d9', '#3a95c4', '#4fb3d9', '#6fd3ee', '#3a95c4'], 156),
   ];
   SPR.dirt = [ditherTile(['#6b5537', '#5c4a2e', '#7a5f3e', '#54432a'], 900)];
+  // 설원 (북쪽)
+  SPR.snow = [
+    ditherTile(['#dfe6ee', '#d2dbe6', '#eaf0f6', '#c8d2de', '#dfe6ee'], 311),
+    ditherTile(['#d8e0ea', '#cdd6e2', '#e4ebf2', '#c2cdd9', '#d8e0ea'], 422),
+  ];
+  // 늪지 (남쪽)
+  SPR.swamp = [
+    ditherTile(['#4a5230', '#3c4628', '#555c36', '#39422a', '#4a5230'], 533),
+    ditherTile(['#465030', '#3a4426', '#525a34', '#364026', '#465030'], 644),
+  ];
 }
 
 /* ================= 팔레트 ================= */
@@ -92,8 +102,7 @@ const C = {
 };
 
 /* ================= 월드 오브젝트 ================= */
-function makeObjects() {
-  SPR.tree = pxSpr(72, 100, `
+const TREE_MAP = `
 ........g........
 .......gGg.......
 ......gGGGg......
@@ -112,8 +121,14 @@ function makeObjects() {
 ........T........
 ........T........
 ........T........
-.......TTT.......`,
+.......TTT.......`;
+
+function makeObjects() {
+  SPR.tree = pxSpr(72, 100, TREE_MAP,
     { G: C.leaf, g: C.leafD, L: C.leafL, T: C.woodD }, PXS, 6);
+  // 눈 덮인 나무 (설원) — 같은 실루엣, 눈 팔레트
+  SPR.treeSnow = pxSpr(72, 100, TREE_MAP,
+    { G: '#2a4a3c', g: '#1c3428', L: '#eaf0f6', T: C.woodD }, PXS, 6);
 
   SPR.bush = pxSpr(56, 44, `
 .g..G..g...
@@ -177,6 +192,39 @@ gGGRgGLg.
 tEEtttEEtt
 .tttttttt.`,
     { t: C.wood, T: C.woodD, E: C.bone }, PXS, 2);
+
+  SPR.mushroom = pxSpr(44, 32, `
+..RRRR....
+.RRWRRR.r.
+.RWRRWR.rr
+...ss..s..
+...ss..s..`,
+    { R: '#c1552e', W: '#f2ead8', r: '#a8451f', s: '#e0d4b8' }, PXS, 2);
+
+  SPR.herb = pxSpr(40, 30, `
+.W..g..W.
+..g.g.g..
+.g.ggg.g.
+....g....
+....g....`,
+    { g: '#4d7a30', W: '#e8e0f4' }, PXS, 2);
+
+  SPR.snowBerry = pxSpr(48, 36, `
+..gBGg...
+.GBgGBGg.
+gGGBgGGg.
+.gBgGBg..
+..gGg....`,
+    { G: '#3c5a4a', g: '#2a4438', B: '#9ec8e8' }, PXS, 2);
+
+  SPR.goldRock = pxSpr(64, 52, `
+....rrrr....
+..rrRoRRr...
+.rRRRrRoRr..
+rRoRRRRrRRr.
+rRrRRoRRRRr.
+.rrrrrrrrr..`,
+    { R: C.rock, r: C.rockD, o: '#e8b830' }, PXS, 4);
 }
 
 /* ================= 구조물 ================= */
@@ -654,6 +702,71 @@ HHHHHHHH..
 s.sSSs.s..
 ...ss.....
 ..ssss....`, { R: C.purp, O: C.purpL, s: C.rockD, S: '#6e6e64' });
+  I.mushroom = pxIcon(`
+..RRRR....
+.RRWRRR...
+.RWRRWRR..
+...ss.....
+...ss.....
+...ss.....`, { R: '#c1552e', W: '#f2ead8', s: '#e0d4b8' });
+  I.cookedMushroom = pxIcon(`
+..RRRR....
+.RRWRRR...
+.RWRRWRR..
+...ss.....
+...ss.....
+...ss.....`, { R: '#8a5c28', W: '#e8d8b8', s: '#c9b088' });
+  I.herb = pxIcon(`
+.W..g..W..
+..g.g.g...
+.g.ggg.g..
+...ggg....
+....g.....
+....g.....`, { g: '#4d7a30', W: '#e8e0f4' });
+  I.snowBerry = pxIcon(`
+....gg....
+...g......
+..BB..BB..
+.BbBB.BbB.
+..BB...BB.
+...BB.BB..`, { B: '#9ec8e8', b: '#e4f2fc', g: '#3c5a4a' });
+  I.goldOre = pxIcon(`
+...rrrr...
+..rRRoRr..
+.rRoRRRRr.
+.rRRRoRRr.
+.rRoRRoRr.
+..rrrrrr..`, { R: C.rock, r: C.rockD, o: '#e8b830' });
+  I.gold = pxIcon(`
+..........
+..lllllll.
+.lLLLLLLl.
+.lGGGGGGl.
+.lGGGGGll.
+..lllll...`, { l: '#8a6a14', L: '#f4d868', G: '#e8b830' });
+  I.stew = pxIcon(`
+...ss.s...
+..MmMMm...
+.BMMMMMB..
+.BBMMMBB..
+..BBBBB...
+...BBB....`, { B: '#6e5230', M: '#9c5a28', m: '#c1552e', s: '#d8d4c4' });
+  I.bandage = pxIcon(`
+..WWWW....
+.WWwwWW...
+.WwWWwW...
+.WWwwWW...
+..WWWW....
+....gg....`, { W: '#f2ead8', w: '#cfc4b0', g: '#4d7a30' });
+  I.furArmor = pxIcon(`
+.mm.mm.mm.
+mMMmMMmMMm
+mMMMMMMMMm
+.mMMmmMMm.
+.mMMMMMMm.
+.mMMmmMMm.
+.mMMMMMMm.
+..mmmmmm..`, { M: '#6e5438', m: '#3c2c1a' });
   // 요리 리컬러
   I.cookedEgg = pxIcon(`
 ...EEE....
@@ -833,6 +946,42 @@ mbbbbbbbbhhhh.
 ...rr.rr..
 ..LL...LL.`,
   ].map(m => pxSpr(44, 58, m, { r: '#5c4630', S: '#d69a68', e: '#1a120a', B: '#8a6a3e', L: '#4a3620' }, PXS, 0));
+
+  // 독사 (늪)
+  MOB_SPRITES.snake = [`
+..........hE.
+.sss.....hhn.
+s...s...hh...
+.....s.ss....
+......ss.....`, `
+..........hE.
+..sss....hhn.
+.s...ss.hh...
+s......ss....
+.............`,
+  ].map(m => pxSpr(56, 24, m, { s: '#4d6a2a', h: '#5d7a34', E: '#e8b830', n: '#c14545' }, PXS, 0));
+
+  // 곰 (설원)
+  MOB_SPRITES.bear = [`
+..mm......mm...
+..mmmmmmmmmm...
+.mbbbbbbbbbbm..
+.mbbbbbbbbbbhh.
+mbbbbbbbbbbhhh.
+mbbbbbbbbbhEhn.
+.bbbbbbbbbhhnn.
+.bbb.bbb..bb...
+.bbb.bbb..bb...`, `
+..mm......mm...
+..mmmmmmmmmm...
+.mbbbbbbbbbbm..
+.mbbbbbbbbbbhh.
+mbbbbbbbbbbhhh.
+mbbbbbbbbbhEhn.
+.bbbbbbbbbhhnn.
+..bbb.bbb.bb...
+.bbb.bbb...bb..`,
+  ].map(m => pxSpr(68, 48, m, { m: '#3c2c1a', b: '#5a442c', h: '#6e5438', E: '#1a120a', n: '#2c1e10' }, PXS, 0));
 
   MOB_SPRITES.wolf = [`
 .k.........k.
