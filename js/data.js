@@ -11,6 +11,11 @@ const ITEMS = {
   iron:       { n:'철괴',      desc:'제련된 철. 튼튼한 도구의 재료.' },
   hide:       { n:'가죽',      desc:'짐승의 가죽. 옷과 주머니를 만든다.' },
   berry:      { n:'산딸기',    desc:'새콤한 야생 딸기.', food:{hunger:8, thirst:3, hp:1} },
+  mushroom:   { n:'버섯',      desc:'늪에서 자라는 통통한 버섯. 구우면 맛있다.', food:{hunger:7} },
+  snowBerry:  { n:'겨울열매',  desc:'설원에서만 열리는 시린 열매.', food:{hunger:6, thirst:4} },
+  herb:       { n:'약초',      desc:'상처에 잘 듣는 쓴 풀. 붕대의 재료.' },
+  goldOre:    { n:'금광석',    desc:'반짝이는 노란 광맥 조각. 화덕에서 제련하자.' },
+  gold:       { n:'금괴',      desc:'묵직한 금덩이. 상인이 아주 좋아한다.' },
   bean:       { n:'콩',        desc:'야생 콩. 밭에 심거나 구워 먹는다.', food:{hunger:6} },
   egg:        { n:'새알',      desc:'둥지에서 얻은 알. 날로 먹긴 좀…', food:{hunger:9} },
   rawMeat:    { n:'생고기',    desc:'신선한 고기. 구워야 제맛.', food:{hunger:8} },
@@ -19,6 +24,9 @@ const ITEMS = {
   cookedBean: { n:'구운 콩',   desc:'고소하게 구운 콩.', food:{hunger:16, hp:2} },
   cookedMeat: { n:'구운 고기', desc:'육즙 가득한 스테이크.', food:{hunger:38, hp:6} },
   cookedFish: { n:'구운 생선', desc:'담백한 생선구이.', food:{hunger:30, hp:5} },
+  cookedMushroom: { n:'버섯구이', desc:'노릇하게 구운 버섯.', food:{hunger:20, hp:3} },
+  stew:       { n:'스튜',      desc:'고기·버섯·콩을 오래 끓인 최고의 한 끼.', food:{hunger:55, thirst:10, hp:10} },
+  bandage:    { n:'붕대',      desc:'약초를 감은 붕대. 사용하면 상처가 아문다.', heal:30 },
   shard:      { n:'어둠의 파편', desc:'어둠의 정령이 남긴 수상한 조각. 기이한 물건을 만들 수 있다.' },
   torch:      { n:'횃불',      desc:'어둠을 밝힌다. 밤에 들고 있으면 타들어간다.', equip:'light', dur:120, light:4.6 },
   lantern:    { n:'정령의 등불', desc:'어둠의 파편이 은은히 빛난다. 꺼지지 않는다.', equip:'light', light:5.6 },
@@ -31,6 +39,7 @@ const ITEMS = {
   darkBlade:  { n:'어둠의 검', desc:'파편이 스며든 검. 밤을 베는 힘.', equip:'tool', tool:'blade', dmg:14, dur:90 },
   waterskin:  { n:'물주머니',  desc:'물을 담아 다닌다. 물가에서 마시면 자동으로 채워진다.', dur:3 },
   leatherArmor:{ n:'가죽옷',   desc:'짐승 가죽으로 만든 옷. 몸을 지키고 따뜻하다.', equip:'armor', def:3, warm:6 },
+  furArmor:   { n:'털외투',    desc:'두툼한 모피 외투. 설원의 추위도 막아준다.', equip:'armor', def:4, warm:14 },
   starHeart:  { n:'별의 심장', desc:'검은 오벨리스크 깊은 곳에서 꺼낸 차가운 핵. 지니고 있으면 어둠 속에서도 앞이 보인다.' },
 };
 
@@ -67,6 +76,8 @@ const TRADES = [
   { give:{ shard:2 }, get:{ iron:1 },  label:'철괴 1' },
   { give:{ hide:2 },  get:{ shard:1 }, label:'어둠의 파편 1' },
   { give:{ shard:1 }, get:{ torch:2 }, label:'횃불 2' },
+  { give:{ gold:1 },  get:{ shard:3 }, label:'어둠의 파편 3' },
+  { give:{ gold:1 },  get:{ iron:2 },  label:'철괴 2' },
   { give:{ shard:5 }, get:'page',      label:'낡은 일기 한 장' },
 ];
 
@@ -109,6 +120,9 @@ const RECIPES = [
   { cat:'무기',   out:'darkBlade',qty:1, mats:{shard:5, flint:2, twig:1}, lv:4, lock:'레벨 4 필요' },
   { cat:'장비',   out:'waterskin',qty:1, mats:{hide:1, grass:1},          lv:1 },
   { cat:'장비',   out:'leatherArmor', qty:1, mats:{hide:3, grass:2},      lv:2, lock:'레벨 2 필요' },
+  { cat:'장비',   out:'furArmor', qty:1, mats:{hide:4, grass:2},          lv:3, lock:'레벨 3 필요' },
+  { cat:'장비',   out:'bandage',  qty:1, mats:{herb:2, grass:1},          lv:1 },
+  { cat:'도구',   out:'gold',     qty:1, mats:{goldOre:2},                lv:3, lock:'레벨 3 필요', smelt:true },
   { cat:'장비',   out:'lantern',  qty:1, mats:{shard:3, twig:1},          lv:3, lock:'레벨 3 필요' },
   { cat:'불/야영', out:'torch',    qty:1, mats:{grass:1, twig:1},          lv:1 },
   { cat:'불/야영', out:'campfire', place:true, mats:{grass:2, log:1},      lv:1 },
@@ -121,6 +135,8 @@ const RECIPES = [
   { cat:'요리',   out:'cookedBean', qty:1, mats:{bean:1},    lv:1, fire:true },
   { cat:'요리',   out:'cookedMeat', qty:1, mats:{rawMeat:1}, lv:1, fire:true },
   { cat:'요리',   out:'cookedFish', qty:1, mats:{fish:1},    lv:1, fire:true },
+  { cat:'요리',   out:'cookedMushroom', qty:1, mats:{mushroom:1}, lv:1, fire:true },
+  { cat:'요리',   out:'stew',       qty:1, mats:{rawMeat:1, mushroom:1, bean:1}, lv:2, lock:'레벨 2 필요', fire:true },
 ];
 const CRAFT_CATS = ['도구','무기','장비','불/야영','요리'];
 
@@ -208,6 +224,18 @@ const QUESTS = [
   { title:'어둠과의 거래', exp:120, lines:[
     { t:'어둠의 제단에 봉헌하기 (밤, 파편 2개)', type:'altar', key:'any', n:1 },
   ]},
+  { title:'낯선 땅', exp:100, lines:[
+    { t:'늪지에서 버섯 3개 수집 (남쪽)', type:'collect', key:'mushroom', n:3 },
+    { t:'설원에서 겨울열매 2개 수집 (북쪽)', type:'collect', key:'snowBerry', n:2 },
+  ]},
+  { title:'요리사의 길', exp:110, lines:[
+    { t:'스튜 끓이기 (고기+버섯+콩)', type:'craft', key:'stew', n:1 },
+    { t:'붕대 만들기 (약초 2+풀 1)', type:'craft', key:'bandage', n:1 },
+  ]},
+  { title:'북쪽의 왕', exp:160, lines:[
+    { t:'곰 사냥하기 (설원)', type:'kill', key:'bear', n:1 },
+    { t:'털외투 제작', type:'craft', key:'furArmor', n:1 },
+  ]},
 ];
 
 // ===== 생물 =====
@@ -223,20 +251,34 @@ const MOBS = {
   trader: { n:'방랑 상인',   kind:'npc',   hp:999, dmg:0,  speed:1.2, exp:0, drops:[] },
   boar:   { n:'멧돼지',     kind:'animal', hp:34, dmg:8,  speed:2.4, exp:25, retaliate:true,
             drops:[{id:'rawMeat', q:2, p:1}, {id:'hide', q:1, p:1}] },
+  snake:  { n:'독사',       kind:'animal', hp:14, dmg:7,  speed:2.0, exp:18, retaliate:true, territorial:true,
+            drops:[{id:'rawMeat', q:1, p:1}, {id:'herb', q:1, p:0.4}] },
+  bear:   { n:'곰',         kind:'animal', hp:60, dmg:14, speed:2.3, exp:60, retaliate:true,
+            drops:[{id:'rawMeat', q:3, p:1}, {id:'hide', q:2, p:1}] },
 };
 
-// 세계 오브젝트 정의
+// 세계 오브젝트 정의 (tiles: 배치 가능한 타일 종류 — 0 초원, 3 설원, 4 늪지)
 const WORLD_OBJS = {
-  tree:   { n:'나무',     tool:'axe',  hits:4, yields:[{id:'log',q:2},{id:'twig',q:1}], respawn:0,   solid:true },
-  bush:   { n:'수풀',     tool:null,   hits:1, yields:[{id:'grass',q:2}],               respawn:90 },
-  rock:   { n:'바위',     tool:'pick', hits:4, yields:[{id:'stone',q:2},{id:'flint',q:1},{id:'ironOre',q:1,p:0.55}], respawn:0, solid:true },
-  twig:   { n:'나뭇가지', tool:null,   hits:1, yields:[{id:'twig',q:1}],                respawn:120 },
-  flint:  { n:'부싯돌',   tool:null,   hits:1, yields:[{id:'flint',q:1}],               respawn:150 },
-  pebble: { n:'돌멩이',   tool:null,   hits:1, yields:[{id:'stone',q:1}],               respawn:150 },
-  berry:  { n:'산딸기',   tool:null,   hits:1, yields:[{id:'berry',q:2}],               respawn:120 },
-  bean:   { n:'콩',       tool:null,   hits:1, yields:[{id:'bean',q:2}],                respawn:120 },
-  nest:   { n:'새알',     tool:null,   hits:1, yields:[{id:'egg',q:2}],                 respawn:180 },
+  tree:   { n:'나무',     tool:'axe',  hits:4, yields:[{id:'log',q:2},{id:'twig',q:1}], respawn:0,   solid:true, tiles:[0,3] },
+  bush:   { n:'수풀',     tool:null,   hits:1, yields:[{id:'grass',q:2}],               respawn:90,  tiles:[0,4] },
+  rock:   { n:'바위',     tool:'pick', hits:4, yields:[{id:'stone',q:2},{id:'flint',q:1},{id:'ironOre',q:1,p:0.55}], respawn:0, solid:true, tiles:[0,3,4] },
+  twig:   { n:'나뭇가지', tool:null,   hits:1, yields:[{id:'twig',q:1}],                respawn:120, tiles:[0,4] },
+  flint:  { n:'부싯돌',   tool:null,   hits:1, yields:[{id:'flint',q:1}],               respawn:150, tiles:[0,3] },
+  pebble: { n:'돌멩이',   tool:null,   hits:1, yields:[{id:'stone',q:1}],               respawn:150, tiles:[0,3,4] },
+  berry:  { n:'산딸기',   tool:null,   hits:1, yields:[{id:'berry',q:2}],               respawn:120, tiles:[0] },
+  bean:   { n:'콩',       tool:null,   hits:1, yields:[{id:'bean',q:2}],                respawn:120, tiles:[0] },
+  nest:   { n:'새알',     tool:null,   hits:1, yields:[{id:'egg',q:2}],                 respawn:180, tiles:[0] },
+  mushroom:{ n:'버섯',    tool:null,   hits:1, yields:[{id:'mushroom',q:2}],            respawn:140, tiles:[4] },
+  herb:   { n:'약초',     tool:null,   hits:1, yields:[{id:'herb',q:2}],                respawn:160, tiles:[4] },
+  snowBerry:{ n:'겨울열매', tool:null, hits:1, yields:[{id:'snowBerry',q:2}],           respawn:140, tiles:[3] },
+  goldRock:{ n:'금맥 바위', tool:'pick', hits:5, yields:[{id:'goldOre',q:2},{id:'stone',q:1}], respawn:0, solid:true, tiles:[3,4] },
 };
+// 바이옴 배치 밀도 (신규 저장/마이그레이션 공용)
+const OBJ_DENSITY = [
+  ['tree',90],['bush',55],['rock',26],['twig',34],['flint',22],['pebble',20],
+  ['berry',16],['bean',14],['nest',10],
+  ['mushroom',16],['herb',12],['snowBerry',12],['goldRock',8],
+];
 
 const FIELD_GROW = 0.6; // 밭 성장에 걸리는 게임일
 const EXP_TABLE = lv => 40 + (lv-1)*35;  // 다음 레벨까지 필요 경험치
