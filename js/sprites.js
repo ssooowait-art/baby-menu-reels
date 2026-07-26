@@ -27,13 +27,28 @@ function drawPix(ctx, map, pal, x, y, s) {
     }
   }
 }
-// 픽셀맵 → 지정 크기 캔버스 (가로 중앙, 바닥 정렬)
-function pxSpr(w, h, map, pal, s = PXS, mb = 4) {
+// 픽셀맵 → 지정 크기 캔버스 (가로 중앙, 바닥 정렬, 자동 외곽선)
+function pxSpr(w, h, map, pal, s = PXS, mb = 4, outline = true) {
   const rows = map.trim().split('\n');
   const mw = Math.max(...rows.map(r => r.length)) * s;
   const mh = rows.length * s;
   return mkCanvas(w, h, (ctx) => {
-    drawPix(ctx, map, pal, ((w - mw) / 2) | 0, h - mh - mb, s);
+    const ox = ((w - mw) / 2) | 0, oy = h - mh - mb;
+    if (outline) {
+      // 실루엣 주변 1도트 어두운 테두리 → 배경 위에서 또렷해진다
+      const filled = (r, c) => !!(rows[r] && pal[rows[r][c]]);
+      ctx.fillStyle = 'rgba(22,18,10,.85)';
+      for (let r = -1; r <= rows.length; r++) {
+        const len = Math.max(...rows.map(x => x.length));
+        for (let c = -1; c <= len; c++) {
+          if (filled(r, c)) continue;
+          if (filled(r-1,c) || filled(r+1,c) || filled(r,c-1) || filled(r,c+1)) {
+            ctx.fillRect(ox + c * s, oy + r * s, s, s);
+          }
+        }
+      }
+    }
+    drawPix(ctx, map, pal, ox, oy, s);
   });
 }
 // 40x40 아이콘 (10x10 도트)
@@ -48,42 +63,50 @@ function pxIcon(map, pal) {
 
 const SPR = {};
 
-/* ================= 타일 (2px 도트 디더링) ================= */
-function ditherTile(colors, seed) {
+/* ================= 타일 (플랫 바탕 + 수작업 도트 데코) ================= */
+// 진짜 픽셀아트 방식: 평평한 단색 다이아몬드 + 손으로 찍은 데코 몇 개.
+// 랜덤 노이즈가 아니라서 화면이 차분하고, 오브젝트(4px 도트)와 밀도가 맞는다.
+const TILE_BASE = { grass:'#3e6330', snow:'#dce3ed', swamp:'#47512d', water:'#3f9cc9', dirt:'#6b5537' };
+function decoTile(base, decos) {
   return mkCanvas(TW, TH, (ctx) => {
-    const rnd = srand(seed);
-    for (let py = 0; py < 16; py++) {
-      for (let px = 0; px < 32; px++) {
-        const dx = (px + 0.5 - 16) / 16, dy = (py + 0.5 - 8) / 8;
-        if (Math.abs(dx) + Math.abs(dy) <= 1) {
-          ctx.fillStyle = colors[(rnd() * colors.length) | 0];
-          ctx.fillRect(px * 2, py * 2, 2, 2);
-        }
+    // 1px 확장해 이웃 타일과 겹침 → 안티앨리어싱 이음선 제거
+    ctx.beginPath();
+    ctx.moveTo(TW/2, -1.5); ctx.lineTo(TW + 1.5, TH/2); ctx.lineTo(TW/2, TH + 1.5); ctx.lineTo(-1.5, TH/2);
+    ctx.closePath();
+    ctx.fillStyle = base; ctx.fill();
+    // 4px 도트 데코 (16x8 그리드, 다이아 안쪽만)
+    for (const [dx, dy, c] of decos) {
+      const cx = (dx + 0.5 - 8) / 8, cy = (dy + 0.5 - 4) / 4;
+      if (Math.abs(cx) + Math.abs(cy) <= 0.88) {
+        ctx.fillStyle = c;
+        ctx.fillRect(dx * 4, dy * 4, 4, 4);
       }
     }
   });
 }
 function makeTiles() {
+  const gD = '#2e4d22', gL = '#548038', fW = '#dce8c8';   // 풀 어두움/밝음/들꽃
   SPR.grass = [
-    ditherTile(['#41682f', '#3a5f2b', '#4a7332', '#35552a', '#41682f'], 7),
-    ditherTile(['#3d642c', '#365929', '#446b31', '#33532a', '#3d642c'], 99),
-    ditherTile(['#446b31', '#3a5f2b', '#4d7736', '#35552a', '#446b31'], 173),
-    ditherTile(['#3a5f2b', '#325426', '#41682f', '#2e4d20', '#3a5f2b'], 245),
+    decoTile(TILE_BASE.grass, [[5,3,gD],[6,3,gL],[10,5,gD],[3,5,gD],[12,3,gL]]),
+    decoTile(TILE_BASE.grass, [[8,2,gD],[9,2,gL],[4,4,gD],[11,5,gD],[6,6,gL]]),
+    decoTile(TILE_BASE.grass, [[7,5,gD],[12,4,gD],[3,3,gL],[9,6,gD]]),
+    decoTile(TILE_BASE.grass, [[6,4,gD],[7,4,gL],[10,2,gD],[4,6,gD],[11,6,fW]]),
   ];
+  const wL = '#77c8e4', wD = '#2f86b4';
   SPR.water = [
-    ditherTile(['#4fb3d9', '#3a95c4', '#5fc3e4', '#3a95c4', '#4fb3d9'], 55),
-    ditherTile(['#4fb3d9', '#3a95c4', '#4fb3d9', '#6fd3ee', '#3a95c4'], 156),
+    decoTile(TILE_BASE.water, [[4,3,wL],[5,3,wL],[10,5,wL],[11,5,wL],[8,2,wD],[6,6,wD]]),
+    decoTile(TILE_BASE.water, [[6,4,wL],[7,4,wL],[12,3,wL],[13,3,wL],[4,6,wD],[10,2,wD]]),
   ];
-  SPR.dirt = [ditherTile(['#6b5537', '#5c4a2e', '#7a5f3e', '#54432a'], 900)];
-  // 설원 (북쪽)
+  SPR.dirt = [decoTile(TILE_BASE.dirt, [[5,3,'#57452b'],[10,5,'#57452b'],[8,4,'#7d6540'],[4,6,'#57452b']])];
+  const sS = '#c2cdd9', sW = '#f7fafc';                    // 눈 그림자/반짝임
   SPR.snow = [
-    ditherTile(['#dfe6ee', '#d2dbe6', '#eaf0f6', '#c8d2de', '#dfe6ee'], 311),
-    ditherTile(['#d8e0ea', '#cdd6e2', '#e4ebf2', '#c2cdd9', '#d8e0ea'], 422),
+    decoTile(TILE_BASE.snow, [[5,4,sS],[6,4,sS],[11,3,sS],[9,6,sW],[3,3,sW]]),
+    decoTile(TILE_BASE.snow, [[8,3,sS],[9,3,sS],[4,5,sS],[12,5,sW],[6,2,sS]]),
   ];
-  // 늪지 (남쪽)
+  const mD = '#37401f', mL = '#5c6836', mP = '#3f6a58';    // 늪 어두움/갈대/물웅덩이
   SPR.swamp = [
-    ditherTile(['#4a5230', '#3c4628', '#555c36', '#39422a', '#4a5230'], 533),
-    ditherTile(['#465030', '#3a4426', '#525a34', '#364026', '#465030'], 644),
+    decoTile(TILE_BASE.swamp, [[5,3,mD],[6,3,mL],[10,5,mP],[11,5,mP],[3,5,mD]]),
+    decoTile(TILE_BASE.swamp, [[8,2,mL],[4,4,mD],[11,3,mD],[7,6,mP],[12,4,mL]]),
   ];
 }
 
@@ -259,7 +282,7 @@ s..TTTTTT..s`,
 .OORRROO.
 .ORRRRRR.
 ..RRRRR..`,
-  ].map(m => pxSpr(40, 44, m, flamePal, PXS, 2));
+  ].map(m => pxSpr(40, 44, m, flamePal, PXS, 2, false));
 
   SPR.furnace = pxSpr(64, 60, `
 ...ssssss...
@@ -358,7 +381,7 @@ s.sSSSSSSs.s
 .OOROO.
 .ORRRO.
 ..RRR..`,
-  ].map(m => pxSpr(32, 34, m, bfPal, PXS, 2));
+  ].map(m => pxSpr(32, 34, m, bfPal, PXS, 2, false));
 
   // ---- 유적 ----
   SPR.dolmen = pxSpr(84, 72, `
@@ -818,16 +841,16 @@ SCCcCCCS
 .CCCCCC.`;
 function makePlayer() {
   SPR.playerWalk = [
-    pxSpr(32, 60, PLAYER_BODY + `
+    pxSpr(40, 64, PLAYER_BODY + `
 ..S..S..
 ..S..S..
-.BB..BB.`, PLAYER_PAL, PXS, 0),
-    pxSpr(32, 60, PLAYER_BODY + `
+.BB..BB.`, PLAYER_PAL, PXS, 2),
+    pxSpr(40, 64, PLAYER_BODY + `
 .S....S.
 .S....S.
-BB....BB`, PLAYER_PAL, PXS, 0),
+BB....BB`, PLAYER_PAL, PXS, 2),
   ];
-  SPR.playerSwing = pxSpr(36, 60, `
+  SPR.playerSwing = pxSpr(44, 64, `
 ..HHHH..s
 .HHHHHH.s
 HHHHHHHHs
@@ -841,7 +864,7 @@ SCCcCCC..
 .CCCCCC..
 ..S..S...
 ..S..S...
-.BB..BB..`, PLAYER_PAL, PXS, 0);
+.BB..BB..`, PLAYER_PAL, PXS, 2);
 }
 
 function drawPlayer(ctx, x, y, t, flip, swing) {
@@ -856,7 +879,7 @@ function drawPlayer(ctx, x, y, t, flip, swing) {
   let spr;
   if (swing > 0.3) spr = SPR.playerSwing;
   else spr = SPR.playerWalk[t > 0 ? (t * 8 | 0) % 2 : 0];
-  ctx.drawImage(spr, -16, -spr.height + 2 + bob);
+  ctx.drawImage(spr, -spr.width / 2, -spr.height + 4 + bob);
   ctx.restore();
 }
 
@@ -881,7 +904,7 @@ PPWBpWBPPP
 ..PPpPPP..
 ..PP.PP.P.
 .P...P....`,
-  ].map(m => pxSpr(44, 44, m, { P: C.purpD, p: '#5a2a8c', W: '#fff', B: '#1a0a2c' }, PXS, 2));
+  ].map(m => pxSpr(52, 50, m, { P: C.purpD, p: '#5a2a8c', W: '#fff', B: '#1a0a2c' }, PXS, 2));
 
   MOB_SPRITES.rabbit = [`
 .....e..e.
@@ -898,7 +921,7 @@ PPWBpWBPPP
 .Wffffffff
 .fffffffn.
 .ff....ff.`,
-  ].map(m => pxSpr(44, 36, m, { e: '#cfc4b0', f: '#cfc4b0', E: C.eye, W: '#fff', n: '#e8a8a8' }, PXS, 0));
+  ].map(m => pxSpr(52, 42, m, { e: '#cfc4b0', f: '#cfc4b0', E: C.eye, W: '#fff', n: '#e8a8a8' }, PXS, 2));
 
   MOB_SPRITES.boar = [`
 ..mmmmmmmm....
@@ -915,7 +938,7 @@ mbbbbbbbbhhhh.
 .bbbbbbbbhEhn.
 ..bb.bb..ht.n.
 ..bb..bb.b....`,
-  ].map(m => pxSpr(60, 40, m, { m: '#3c2c1a', b: '#5c4630', h: '#6e5238', E: C.eye, n: '#8a6a4a', t: C.bone }, PXS, 0));
+  ].map(m => pxSpr(68, 46, m, { m: '#3c2c1a', b: '#5c4630', h: '#6e5238', E: C.eye, n: '#8a6a4a', t: C.bone }, PXS, 2));
 
   // 방랑 상인 (두건 쓴 행상)
   MOB_SPRITES.trader = [`
@@ -945,7 +968,7 @@ mbbbbbbbbhhhh.
 ...rr.rr..
 ...rr.rr..
 ..LL...LL.`,
-  ].map(m => pxSpr(44, 58, m, { r: '#5c4630', S: '#d69a68', e: '#1a120a', B: '#8a6a3e', L: '#4a3620' }, PXS, 0));
+  ].map(m => pxSpr(52, 64, m, { r: '#5c4630', S: '#d69a68', e: '#1a120a', B: '#8a6a3e', L: '#4a3620' }, PXS, 2));
 
   // 독사 (늪)
   MOB_SPRITES.snake = [`
@@ -959,7 +982,7 @@ s...s...hh...
 .s...ss.hh...
 s......ss....
 .............`,
-  ].map(m => pxSpr(56, 24, m, { s: '#4d6a2a', h: '#5d7a34', E: '#e8b830', n: '#c14545' }, PXS, 0));
+  ].map(m => pxSpr(64, 30, m, { s: '#4d6a2a', h: '#5d7a34', E: '#e8b830', n: '#c14545' }, PXS, 2));
 
   // 곰 (설원)
   MOB_SPRITES.bear = [`
@@ -981,7 +1004,7 @@ mbbbbbbbbbhEhn.
 .bbbbbbbbbhhnn.
 ..bbb.bbb.bb...
 .bbb.bbb...bb..`,
-  ].map(m => pxSpr(68, 48, m, { m: '#3c2c1a', b: '#5a442c', h: '#6e5438', E: '#1a120a', n: '#2c1e10' }, PXS, 0));
+  ].map(m => pxSpr(72, 54, m, { m: '#3c2c1a', b: '#5a442c', h: '#6e5438', E: '#1a120a', n: '#2c1e10' }, PXS, 2));
 
   MOB_SPRITES.wolf = [`
 .k.........k.
@@ -998,7 +1021,7 @@ mbbbbbbbbbhEhn.
 ...kkkkkkkk..
 ....kk..kk...
 ....k....k...`,
-  ].map(m => pxSpr(60, 40, m, { k: '#1c1430', K: '#241a3c', E: '#ff2f4a' }, PXS, 0));
+  ].map(m => pxSpr(64, 46, m, { k: '#1c1430', K: '#241a3c', E: '#ff2f4a' }, PXS, 2));
 }
 
 function drawCreaturePix(ctx, key, x, y, t, hpRatio, flip, extra) {

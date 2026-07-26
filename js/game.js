@@ -1177,6 +1177,7 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 
+const TILE_BLEND = ['#3e6330', '#3f9cc9', '#6b5537', '#dce3ed', '#47512d']; // 타일별 기본색
 const worldSX = (x, y) => (x - y) * TW / 2;
 const worldSY = (x, y) => (x + y) * TH / 2;
 function camOffset() {
@@ -1206,6 +1207,21 @@ function render() {
         : t === 4 ? SPR.swamp[(x * 7 + y * 13) % 2]
         : SPR.grass[(x * 7 + y * 13) % 4];
       ctx.drawImage(spr, sx - TW / 2, sy - TH / 2);
+      // 바이옴 경계 디더 블렌딩 (이웃 색 도트를 살짝 섞어 계단 완화)
+      if (t !== 1) {
+        const nR = inMap(x + 1, y) ? G.tiles[idx(x + 1, y)] : t;
+        const nD = inMap(x, y + 1) ? G.tiles[idx(x, y + 1)] : t;
+        if (nR !== t && nR !== 1) {
+          ctx.fillStyle = TILE_BLEND[nR];
+          if ((x + y) % 2) { ctx.fillRect(sx + 16, sy + 4, 4, 4); ctx.fillRect(sx + 6, sy + 10, 4, 4); }
+          else ctx.fillRect(sx + 12, sy + 7, 4, 4);
+        }
+        if (nD !== t && nD !== 1) {
+          ctx.fillStyle = TILE_BLEND[nD];
+          if ((x + y) % 2) { ctx.fillRect(sx - 20, sy + 4, 4, 4); ctx.fillRect(sx - 10, sy + 10, 4, 4); }
+          else ctx.fillRect(sx - 16, sy + 7, 4, 4);
+        }
+      }
     }
   }
 
