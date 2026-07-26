@@ -59,7 +59,10 @@ const RUIN_DEFS = {
   dolmen:  { n:'고인돌',        tier:1, count:3 },
   chamber: { n:'무너진 석실',   tier:2, count:2 },
   obelisk: { n:'검은 오벨리스크', tier:3, count:1 },
-  altar:   { n:'어둠의 제단',   tier:4, count:2 },  // 반복 사용 가능 (밤, 파편 2 봉헌)
+  altar:   { n:'어둠의 제단',   tier:4, count:2, once:false },  // 반복 사용 (밤, 파편 2 봉헌)
+  cave:    { n:'동굴 입구',     tier:5, count:1, once:false },  // 던전 입장
+  exit:    { n:'동굴 출구',     tier:0, count:0, once:false },  // 던전 내부 전용
+  bossDoor:{ n:'심연의 문',     tier:0, count:0 },              // 던전 내부 전용 (별의 심장 필요)
 };
 
 // ===== 제단의 축복 =====
@@ -236,6 +239,14 @@ const QUESTS = [
     { t:'곰 사냥하기 (설원)', type:'kill', key:'bear', n:1 },
     { t:'털외투 제작', type:'craft', key:'furArmor', n:1 },
   ]},
+  { title:'심연으로', exp:180, lines:[
+    { t:'동굴을 찾아 들어가기 (광원 필수!)', type:'enterCave', key:'any', n:1 },
+    { t:'어둠 수정 채굴하여 파편 4개 수집', type:'collect', key:'shard', n:4 },
+  ]},
+  { title:'마지막 의식', exp:400, lines:[
+    { t:'심연의 문 열기 (별의 심장 필요)', type:'openDoor', key:'any', n:1 },
+    { t:'깨어난 어둠 처치', type:'kill', key:'awakened', n:1 },
+  ]},
 ];
 
 // ===== 생물 =====
@@ -255,6 +266,10 @@ const MOBS = {
             drops:[{id:'rawMeat', q:1, p:1}, {id:'herb', q:1, p:0.4}] },
   bear:   { n:'곰',         kind:'animal', hp:60, dmg:14, speed:2.3, exp:60, retaliate:true,
             drops:[{id:'rawMeat', q:3, p:1}, {id:'hide', q:2, p:1}] },
+  bat:    { n:'동굴 박쥐',   kind:'night', hp:10, dmg:4,  speed:3.2, exp:10, aggro:7,
+            drops:[{id:'shard', q:1, p:0.15}] },
+  awakened:{ n:'깨어난 어둠', kind:'night', hp:220, dmg:16, speed:1.6, exp:400, aggro:99, braveFire:true,
+            drops:[{id:'shard', q:5, p:1}] },
 };
 
 // 세계 오브젝트 정의 (tiles: 배치 가능한 타일 종류 — 0 초원, 3 설원, 4 늪지)
@@ -268,10 +283,11 @@ const WORLD_OBJS = {
   berry:  { n:'산딸기',   tool:null,   hits:1, yields:[{id:'berry',q:2}],               respawn:120, tiles:[0] },
   bean:   { n:'콩',       tool:null,   hits:1, yields:[{id:'bean',q:2}],                respawn:120, tiles:[0] },
   nest:   { n:'새알',     tool:null,   hits:1, yields:[{id:'egg',q:2}],                 respawn:180, tiles:[0] },
-  mushroom:{ n:'버섯',    tool:null,   hits:1, yields:[{id:'mushroom',q:2}],            respawn:140, tiles:[4] },
+  mushroom:{ n:'버섯',    tool:null,   hits:1, yields:[{id:'mushroom',q:2}],            respawn:140, tiles:[4,6] },
   herb:   { n:'약초',     tool:null,   hits:1, yields:[{id:'herb',q:2}],                respawn:160, tiles:[4] },
   snowBerry:{ n:'겨울열매', tool:null, hits:1, yields:[{id:'snowBerry',q:2}],           respawn:140, tiles:[3] },
-  goldRock:{ n:'금맥 바위', tool:'pick', hits:5, yields:[{id:'goldOre',q:2},{id:'stone',q:1}], respawn:0, solid:true, tiles:[3,4] },
+  goldRock:{ n:'금맥 바위', tool:'pick', hits:5, yields:[{id:'goldOre',q:2},{id:'stone',q:1}], respawn:0, solid:true, tiles:[3,4,6] },
+  crystal: { n:'어둠 수정', tool:'pick', hits:3, yields:[{id:'shard',q:2}],             respawn:0, solid:true, tiles:[6] },
 };
 // 바이옴 배치 밀도 (신규 저장/마이그레이션 공용)
 const OBJ_DENSITY = [

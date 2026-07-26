@@ -108,6 +108,21 @@ function makeTiles() {
     decoTile(TILE_BASE.swamp, [[5,3,mD],[6,3,mL],[10,5,mP],[11,5,mP],[3,5,mD]]),
     decoTile(TILE_BASE.swamp, [[8,2,mL],[4,4,mD],[11,3,mD],[7,6,mP],[12,4,mL]]),
   ];
+  // 동굴 바닥/벽
+  SPR.caveFloor = [
+    decoTile('#3a352e', [[5,3,'#2c2822'],[10,5,'#463f36'],[8,4,'#2c2822'],[4,6,'#463f36']]),
+    decoTile('#3a352e', [[7,2,'#463f36'],[11,4,'#2c2822'],[4,4,'#2c2822'],[9,6,'#463f36']]),
+  ];
+  SPR.caveWall = pxSpr(64, 58, `
+...ssSSSSss...
+..sSSSLSSSSs..
+.sSSSSSSSsSSs.
+sSSsSSSSSSSSSs
+sSSSSSLsSSSSSs
+sSSSSSSSSSsSSs
+.sSsSSSSSSSSs.
+..ssSSSsSSss..`,
+    { s: '#26221c', S: '#332e26', L: '#443d32' }, PXS, 0, false);
 }
 
 /* ================= 팔레트 ================= */
@@ -248,6 +263,59 @@ rRoRRRRrRRr.
 rRrRRoRRRRr.
 .rrrrrrrrr..`,
     { R: C.rock, r: C.rockD, o: '#e8b830' }, PXS, 4);
+
+  // 어둠 수정 (동굴)
+  SPR.crystal = pxSpr(52, 48, `
+....p.....
+...pP..p..
+..pPPp.Pp.
+..pPLp.Pp.
+.ppPPppPpp
+.rPPPPPPr.
+..rrrrrr..`,
+    { P: C.purp, p: '#5c1a8c', L: C.purpP, r: C.rockD }, PXS, 2);
+
+  // 동굴 입구 (지상)
+  SPR.caveEntrance = pxSpr(80, 70, `
+.....ssssssss.....
+...ssSSSSSSSSss...
+..sSSSSSLSSSSSSs..
+.sSSSS______SSSSs.
+.sSSS________SSSs.
+sSSSS________SSSSs
+sSSS__________SSSs
+sSSS__________SSSs
+.gg.__________.gg.`,
+    { s: '#26221c', S: '#4a453c', L: '#5c554a', _: '#0a0806', g: '#2e4d22' }, PXS, 2);
+
+  // 동굴 출구 (빛기둥 사다리)
+  SPR.exitBeam = pxSpr(56, 74, `
+...LLLLL...
+...LlllL...
+...LlllL...
+...LlllL...
+...LlllL...
+...LlllL...
+...LlllL...
+..tLlllLt..
+..tttttttt.`,
+    { L: 'rgba(255,240,180,.35)', l: 'rgba(255,246,214,.55)', t: C.wood }, PXS, 2, false);
+
+  // 심연의 문
+  SPR.bossDoor = pxSpr(72, 84, `
+..ppppppppppp..
+.pkkkkkkkkkkkp.
+pkkgkkkkkkkgkkp
+pkkkkkgggkkkkkp
+pkkkkgkkkgkkkkp
+pkkkkgkOkgkkkkp
+pkkkkgkkkgkkkkp
+pkkkkkgggkkkkkp
+pkkgkkkkkkkgkkp
+pkkkkkkkkkkkkkp
+pkkkkkkkkkkkkkp
+.ppppppppppppp.`,
+    { p: '#241e30', k: '#16121e', g: C.purp, O: C.purpL }, PXS, 2);
 }
 
 /* ================= 구조물 ================= */
@@ -939,6 +1007,46 @@ mbbbbbbbbhhhh.
 ..bb.bb..ht.n.
 ..bb..bb.b....`,
   ].map(m => pxSpr(68, 46, m, { m: '#3c2c1a', b: '#5c4630', h: '#6e5238', E: C.eye, n: '#8a6a4a', t: C.bone }, PXS, 2));
+
+  // 동굴 박쥐
+  MOB_SPRITES.bat = [`
+.ww.....ww.
+wwww.k.wwww
+.wwwkkkwww.
+...kEkEk...
+....kkk....`, `
+...w...w...
+..www.www..
+.wwwkkkwww.
+...kEkEk...
+....kkk....`,
+  ].map(m => pxSpr(52, 30, m, { w: '#2c2438', k: '#1c1430', E: '#e8b830' }, PXS, 6));
+
+  // 깨어난 어둠 (보스) — 6px 도트로 더 크고 묵직하게
+  MOB_SPRITES.awakened = [`
+....PPPPPP....
+..PPpppppPPP..
+.PPpkkkkkpPPP.
+PPpkkWkWkkpPPP
+PpkkkkkkkkkpPP
+PpkWkkkkkWkpPP
+PPpkkkWkkkpPPP
+.PPpkkkkkpPPP.
+..PPpppppPP...
+.P.PPPPPP.P.P.
+P....PP....P..`, `
+....PPPPPP....
+..PPpppppPPPP.
+.PPpkkkkkpPP..
+PPpkkWkWkkpPPP
+PpkkkkkkkkkpPP
+PpkWkkkkkWkpPP
+PPpkkkWkkkpPPP
+.PPpkkkkkpPPP.
+..PPpppppPPP..
+.P.PPPPP.PP.P.
+..P....PP...P.`,
+  ].map(m => pxSpr(136, 116, m, { P: '#4a2470', p: '#7a2ab0', k: '#160a26', W: '#ff2f4a' }, 8, 8));
 
   // 방랑 상인 (두건 쓴 행상)
   MOB_SPRITES.trader = [`
