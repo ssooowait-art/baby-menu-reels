@@ -278,10 +278,12 @@ function hasBuff(id) { return P.buff && P.buff.id === id && nowGameTime() < P.bu
 function grantBlessing(b) {
   if (b.instant) { // 생명의 은총: 즉시 회복
     P.hp = P.maxHp; P.ep = 100; P.hunger = 100; P.thirst = 100; P.fatigue = 0;
+    fxAt('heal/rise', P.x, P.y, 10);
     toast(`✨ ${b.n}! ${b.desc}`, '#e0c8ff');
     return;
   }
   P.buff = { id: b.id, n: b.n, until: nowGameTime() + DAY_LEN * 0.5 };
+  fxAt('buff/levelup', P.x, P.y, 0, { palette: 'dark' });
   toast(`✨ ${b.n}! ${b.desc}`, '#e0c8ff');
 }
 function updateBuff() {
@@ -312,6 +314,7 @@ function gainExp(n) {
     P.maxHp += 8; P.hp = P.maxHp; P.ep = 100;
     P.str++; P.vit++;
     toast(`⬆ 레벨 ${P.level} 달성!`, '#ffe066');
+    fxAt('buff/levelup', P.x, P.y);
     sfx('level');
   }
   updateHud();
@@ -401,6 +404,11 @@ function toast(msg, color) {
 function spawnFloat(x, y, txt, color) {
   G.floats.push({ x, y, txt, color, t: 0 });
 }
+// 픽셀 이펙트: 타일 좌표 (wx, wy)에서 lift px 위로 띄워 재생
+const FX = PFX.createSystem({ px: PXS });
+function fxAt(name, wx, wy, lift = 0, opts) {
+  FX.spawn(name, worldSX(wx, wy), worldSY(wx, wy) - lift, opts);
+}
 
 /* ---------- 행동 ---------- */
 function tapWorld(wx, wy) {
@@ -488,6 +496,7 @@ function doGather(dt) {
     P.ep = clamp(P.ep - 1.2, 0, 100);
     P.fatigue = clamp(P.fatigue + 0.4, 0, 100);
     sfx(def.tool ? 'hit' : 'pick');
+    fxAt(o.type === 'tree' ? 'gather/wood' : o.type === 'rock' ? 'gather/rock' : 'gather/grass', t.x, t.y, 16);
     // 도구 내구도
     if (def.tool) {
       const ti = hasTool(def.tool);
@@ -500,6 +509,7 @@ function doGather(dt) {
         addItemStack(y.id, y.q * mult);
         spawnFloat(t.x, t.y - 0.6, `+${y.q * mult} ${ITEMS[y.id].n}`, '#fff');
       }
+      if (def.tool) fxAt('smoke/puff', t.x, t.y, 6, { palette: 'earth' });
       gainExp(def.tool ? 6 : 3);
       maybeFindPage(0.03);
       if (def.respawn) { o.dead = true; o.respawnAt = nowGameTime() + def.respawn; }
@@ -511,6 +521,7 @@ function doGather(dt) {
 }
 
 function doDrink() {
+  if (P.target) fxAt('water/splash', P.target.x, P.target.y);
   P.thirst = clamp(P.thirst + 35, 0, 100);
   spawnFloat(P.x, P.y - 1, '+갈증 해소', '#59d5e8');
   // 물주머니 자동 충전
@@ -534,12 +545,14 @@ function doFish(dt) {
     P.ep = clamp(P.ep - 2, 0, 100);
     if (Math.random() < 0.65 + P.luck / 150) {
       addItemStack('fish', 1);
+      fxAt('water/splash', P.target.x, P.target.y);
       spawnFloat(P.x, P.y - 1, '+1 생선', '#6aa8c4');
       gainExp(6);
       maybeFindPage(0.05);
       sfx('pick');
     } else {
       spawnFloat(P.x, P.y - 1, '놓쳤다…', '#8f8b7c');
+      fxAt('water/ripple', P.target.x, P.target.y);
     }
     if (P.inv[ri].dur <= 0) { toast('낚싯대가 부러졌습니다!', '#ff9d2e'); removeSlot(ri); P.target = null; }
     updateQuickslots();
@@ -724,6 +737,7 @@ function enterCave() {
   G.mobs = [];
   bumpCounter('enterCave', 'any');
   toast('축축한 공기가 밀려옵니다… 깊은 곳에서 무언가 웅웅거립니다.', '#c9a2ff');
+  FX.clear(); fxAt('magic/portal', P.x, P.y, 8);
   sfx('quest');
   save();
 }
@@ -735,6 +749,7 @@ function exitCave() {
   G.inCave = false;
   G.mobs = [];
   toast('바깥 공기가 폐를 채웁니다.', '#8f8');
+  FX.clear(); fxAt('magic/portal', P.x, P.y, 8, { palette: 'holy', dur: 0.8 });
   save();
 }
 
@@ -792,6 +807,7 @@ function updateBoss(m, dt) {
       if (dist(m.x, m.y, P.x, P.y) < radius) hurtPlayer(m.phase === 2 ? 22 : 15);
       G.shake = 0.8;
       G.novaFx = { x: m.x, y: m.y, t: 0, r: radius };
+      fxAt('dark/nova', m.x, m.y, 0, { scale: radius / 3.2 });
       sfx('hurt');
     }
   } else if (m.novaCd <= 0) {
@@ -927,6 +943,7 @@ function findPage() {
   G.pages.push(i);
   G.newPages++;
   toast(`📖 일기 발견: 「${LORE_PAGES[i].t}」`, '#e8d8a8');
+  fxAt('item/sparkle', P.x, P.y, 30);
   sfx('quest');
   if (G.pages.length === LORE_PAGES.length) {
     toast('모든 기록을 모았습니다. 먼저 온 자의 이야기가 완성되었습니다.', '#ffd94d');
@@ -969,6 +986,8 @@ function eatItem(i) {
   P.hp = clamp(P.hp + (def.food.hp || 0), 0, P.maxHp);
   s.qty--; if (s.qty <= 0) removeSlot(i);
   spawnFloat(P.x, P.y - 1, `${def.n} 냠냠`, '#c88a3d');
+  fxAt('eat/crumbs', P.x, P.y, 26);
+  if (def.food.hp > 0) fxAt('heal/rise', P.x, P.y, 10);
   bumpCounter('eat', 'any');
   sfx('eat');
   updateInvPanel(); updateHud();
@@ -1060,6 +1079,7 @@ function craft(r) {
   }
   gainExp(6);
   sfx('craft');
+  fxAt('craft/poof', P.x, P.y, 14);
   updateInvPanel(); updateCraftPanel(); updateQuickslots();
 }
 
@@ -1233,7 +1253,7 @@ function cleanupMobs() {
       if (m.killed) { // 플레이어가 처치한 경우에만 보상 (낮 소멸 제외)
         for (const dr of def.drops) if (Math.random() < dr.p) {
           addItemStack(dr.id, dr.q);
-          if (dr.id === 'shard') G.shards += dr.q;
+          if (dr.id === 'shard') { G.shards += dr.q; fxAt('item/shard', P.x, P.y, 6); }
           spawnFloat(m.x, m.y - 0.6, `+${dr.q} ${ITEMS[dr.id].n}`, dr.id === 'shard' ? '#b13cff' : '#fff');
         }
         gainExp(def.exp);
@@ -1241,6 +1261,9 @@ function cleanupMobs() {
         maybeFindPage(0.06);
       }
       const wasBoss = m.type === 'awakened';
+      if (def.kind === 'night') fxAt('dark/spirit-death', m.x, m.y, 16, wasBoss ? { scale: 2.2 } : undefined);
+      else if (m.killed) fxAt('smoke/puff', m.x, m.y, 8);
+      if (wasBoss) fxAt('dark/nova', m.x, m.y, 0, { scale: 1.8, palette: 'holy' });
       G.mobs.splice(i, 1);
       if (P.target && P.target.mob === m) P.target = null;
       if (wasBoss) { G.shake = 1.5; onBossDefeated(); }
@@ -1252,6 +1275,7 @@ function hurtPlayer(rawDmg) {
   const dmg = Math.max(1, rawDmg - armorDef() - Math.floor(P.level / 3));
   P.hp -= dmg;
   spawnFloat(P.x, P.y - 1.4, `-${dmg}`, '#ff5252');
+  fxAt('hit/blood', P.x, P.y, 20);
   sfx('hurt');
   if (P.hp <= 0) die();
 }
@@ -1269,7 +1293,9 @@ function playerAttack(mob) {
         dist(s.x, s.y, mob.x, mob.y) < 4);
     if (lit) { dmg = Math.round(dmg * 1.5); spawnFloat(mob.x, mob.y - 2, '빛이 어둠을 태운다!', '#ffe066'); }
   }
-  if (Math.random() < 0.08 + P.luck / 200) { dmg *= 2; spawnFloat(mob.x, mob.y - 1.6, '치명타!', '#ffe066'); }
+  const crit = Math.random() < 0.08 + P.luck / 200;
+  if (crit) { dmg *= 2; spawnFloat(mob.x, mob.y - 1.6, '치명타!', '#ffe066'); }
+  fxAt(crit ? 'hit/crit' : 'hit/spark', mob.x, mob.y, 20);
   mob.hp -= dmg; mob.killed = true;
   if (MOBS[mob.type].retaliate) mob.angry = true;
   spawnFloat(mob.x, mob.y - 1.1, `-${dmg}`, '#fff');
@@ -1546,12 +1572,14 @@ function render() {
   draws.push({ depth: P.x + P.y + 0.02, fn: () => drawPlayer(ctx, worldSX(P.x, P.y) + ox, worldSY(P.x, P.y) + oy, P.path.length ? animT : 0, P.face < 0, P.swing) });
   draws.sort((a, b) => a.depth - b.depth);
   for (const d of draws) d.fn();
+  FX.draw(ctx, ox, oy, 'world');
 
   // 비
   if (G.rain) drawRain();
 
   // 어둠 & 빛
   drawDarkness(ox, oy);
+  FX.draw(ctx, ox, oy, 'top');
 
   // 타깃 강조 링 (어둠 위에 그려 밤에도 보임)
   if (P.target) {
@@ -2289,6 +2317,35 @@ function bindInput() {
   window.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 }
 
+/* ---------- 환경 이펙트 (불티 · 빗방울 · 발걸음) ---------- */
+let emberT = 0, stepT = 0;
+function updateAmbientFx(dt) {
+  emberT -= dt;
+  if (emberT <= 0) { // 화면 근처의 켜진 불 위로 불티
+    emberT = 1.2;
+    for (const s of G.structs) {
+      if (!s.lit || dist(s.x, s.y, P.x, P.y) > 12) continue;
+      if (s.type === 'campfire') fxAt('fire/embers', s.x, s.y, 30);
+      else if (s.type === 'brazier') fxAt('fire/embers', s.x, s.y, 44, { palette: 'holy' });
+    }
+  }
+  if (G.rain && !G.inCave) { // 플레이어 주변 화면에 빗방울 튀김
+    const n = Math.random() < dt * 14 ? 1 : 0;
+    for (let i = 0; i < n; i++) {
+      FX.spawn('weather/rain-splash', worldSX(P.x, P.y) + (Math.random() - 0.5) * VW,
+        worldSY(P.x, P.y) + 40 + (Math.random() - 0.5) * VH);
+    }
+  }
+  if (P.path.length) { // 걸을 때 발밑 먼지 (눈밭은 흰 눈가루)
+    stepT -= dt;
+    if (stepT <= 0) {
+      stepT = 0.32;
+      const b = biomeAt(P.x, P.y);
+      if (b !== 1) fxAt('dust/step', P.x, P.y, 0, { palette: b === 3 ? 'ice' : b === 4 ? 'poison' : b === 6 ? 'stone' : 'earth' });
+    }
+  }
+}
+
 /* ---------- 메인 루프 ---------- */
 let lastT = 0;
 let hudTimer = 0, saveTimer = 0;
@@ -2305,6 +2362,8 @@ function loop(ts) {
     updateMobs(dt);
     updateSurvival(dt);
   }
+  FX.update(dt);
+  if (!G.gameOver && !G.sleeping && !G.choosing) updateAmbientFx(dt);
   // 떠다니는 텍스트
   for (let i = G.floats.length - 1; i >= 0; i--) {
     G.floats[i].t += dt;

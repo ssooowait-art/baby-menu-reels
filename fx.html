@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>픽셀 이펙트 갤러리</title>
+<meta name="theme-color" content="#0b0d0a">
+<link rel="icon" href="icons/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0b0d0a; --card:#171a14; --line:#2c3125; --ink:#ece6d2; --dim:#8f8b7c; --acc:#ffd94d; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Gowun Dodum",sans-serif; }
+  header { position:sticky; top:0; z-index:2; background:rgba(11,13,10,.94); border-bottom:1px solid var(--line);
+    padding:12px 16px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  h1 { font-family:Jua,sans-serif; font-size:20px; margin:0 auto 0 0; color:var(--acc); }
+  h1 small { color:var(--dim); font-size:13px; font-family:"Gowun Dodum"; margin-left:6px; }
+  select, button { font:inherit; background:#22261d; color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+  button { cursor:pointer; }
+  button:hover { border-color:var(--acc); }
+  a { color:var(--acc); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; padding:12px 16px 0; }
+  .chip { padding:4px 10px; border-radius:99px; font-size:13px; }
+  .chip.on { background:var(--acc); color:#1b1a10; border-color:var(--acc); }
+  main { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; padding:12px 16px 40px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .card canvas { display:block; width:100%; aspect-ratio:1; image-rendering:pixelated; cursor:pointer;
+    background:repeating-conic-gradient(#1e2219 0% 25%, #191c15 0% 50%) 0 0/24px 24px; }
+  .card.night canvas { background:#07080b; }
+  .meta { padding:8px 10px; display:flex; align-items:center; gap:6px; }
+  .meta b { font-size:14px; font-weight:normal; }
+  .meta code { color:var(--dim); font-size:11px; display:block; }
+  .meta button { margin-left:auto; font-size:12px; padding:4px 8px; }
+  .pal { display:flex; gap:2px; padding:0 10px 10px; }
+  .pal i { flex:1; height:6px; border-radius:2px; }
+  footer { color:var(--dim); font-size:13px; padding:0 16px 30px; line-height:1.6; }
+</style>
+</head>
+<body>
+<header>
+  <h1>픽셀 이펙트 갤러리 <small id="count"></small></h1>
+  <label>팔레트 <select id="pal"><option value="">기본</option></select></label>
+  <label>배경 <select id="bg"><option value="">체크</option><option value="night">밤</option></select></label>
+  <button id="replay">↻ 전체 다시</button>
+  <a href="./">← 게임으로</a>
+</header>
+<div class="chips" id="chips"></div>
+<main id="grid"></main>
+<footer>
+  카드를 누르면 다시 재생 · <b>PNG</b> 버튼은 투명 스프라이트 시트(.png)와 Aseprite 형식 JSON을 내려받습니다(고도·유니티 등에서 사용).<br>
+  웹 게임에서는 <code>js/pixelfx.js</code> 하나만 넣고 <code>PFX.createSystem().spawn('fire/burst', x, y, { palette: 'ice' })</code>.
+</footer>
+
+<script src="js/pixelfx.js"></script>
+<script>
+'use strict';
+const CELL = 160;
+const names = Object.keys(PFX.EFFECTS);
+const palSel = document.getElementById('pal');
+for (const k of Object.keys(PFX.PAL)) palSel.add(new Option(k, k));
+document.getElementById('count').textContent = `${names.length}종`;
+
+let cat = '전체';
+const cats = ['전체', ...new Set(names.map(n => PFX.EFFECTS[n].cat))];
+const chips = document.getElementById('chips');
+for (const c of cats) {
+  const b = document.createElement('button');
+  b.className = 'chip' + (c === cat ? ' on' : ''); b.textContent = c;
+  b.onclick = () => { cat = c; [...chips.children].forEach(x => x.classList.toggle('on', x === b)); build(); };
+  chips.appendChild(b);
+}
+
+let cards = [];
+function build() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = ''; cards = [];
+  for (const name of names) {
+    const def = PFX.EFFECTS[name];
+    if (cat !== '전체' && def.cat !== cat) continue;
+    const el = document.createElement('div');
+    el.className = 'card' + (document.getElementById('bg').value ? ' night' : '');
+    const cv = document.createElement('canvas'); cv.width = cv.height = CELL;
+    el.appendChild(cv);
+    const pal = PFX.PAL[palSel.value] || PFX.PAL[def.pal];
+    el.insertAdjacentHTML('beforeend',
+      `<div class="meta"><div><b>${def.n}</b><code>${name}</code></div><button>PNG</button></div>
+       <div class="pal">${pal.map(c => `<i style="background:${c}"></i>`).join('')}</div>`);
+    const card = { name, def, cv, ctx: cv.getContext('2d'), sys: PFX.createSystem({ px: 4 }), wait: 0 };
+    card.ctx.imageSmoothingEnabled = false;
+    cv.onclick = () => fire(card);
+    el.querySelector('button').onclick = () => exportSheet(name);
+    grid.appendChild(el);
+    cards.push(card);
+    fire(card);
+  }
+}
+function fire(card) {
+  card.sys.clear();
+  card.sys.spawn(card.name, CELL / 2, CELL * 0.62, { palette: palSel.value || undefined });
+  card.wait = 0.5;
+}
+function exportSheet(name) {
+  const { canvas, json, frames } = PFX.bake(name, { palette: palSel.value || undefined, cell: CELL });
+  const file = name.replace('/', '-') + (palSel.value ? '-' + palSel.value : '');
+  json.meta.image = file + '.png';
+  canvas.toBlob(b => download(b, file + '.png'));
+  download(new Blob([JSON.stringify(json, null, 1)], { type: 'application/json' }), file + '.json');
+  console.log(`${name}: ${frames} frames`);
+}
+function download(blob, fname) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = fname; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+palSel.onchange = build;
+document.getElementById('bg').onchange = build;
+document.getElementById('replay').onclick = () => cards.forEach(fire);
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.05); last = now;
+  for (const c of cards) {
+    c.sys.update(dt);
+    if (!c.sys.busy) { c.wait -= dt; if (c.wait <= 0) fire(c); } // 끝나면 잠깐 쉬고 반복
+    c.ctx.clearRect(0, 0, CELL, CELL);
+    c.sys.draw(c.ctx);
+  }
+  requestAnimationFrame(loop);
+}
+build();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

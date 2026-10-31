@@ -1,13 +1,15 @@
 // 야생의 어둠 — 서비스 워커 (오프라인 캐시)
 'use strict';
-const CACHE = 'wild-dark-v1';
+const CACHE = 'wild-dark-v2';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/data.js',
   './js/sprites.js',
+  './js/pixelfx.js',
   './js/game.js',
+  './fx.html',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
